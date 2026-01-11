@@ -140,3 +140,77 @@ pub fn get_current_bookmark() -> Result<Option<String>> {
         Ok(Some(bookmark.to_string()))
     }
 }
+
+pub fn is_working_copy_empty() -> Result<bool> {
+    let output = Command::new("jj")
+        .args(&["status"])
+        .output()
+        .context("Failed to check working copy status")?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    // Check if output contains "Working copy changes:" followed by nothing
+    // or if it says "The working copy is clean"
+    let is_empty = stdout.contains("The working copy is clean")
+        || stdout
+            .lines()
+            .skip_while(|line| !line.contains("Working copy changes:"))
+            .skip(1) // Skip the "Working copy changes:" line itself
+            .next()
+            .is_none();
+
+    Ok(is_empty)
+}
+
+#[derive(Debug, Clone)]
+pub struct BookmarkInfo {
+    pub name: String,
+    pub is_current: bool,
+}
+
+pub fn get_bookmarks() -> Result<Vec<BookmarkInfo>> {
+    let output = Command::new("jj")
+        .args(&["bookmark", "list"])
+        .output()
+        .context("Failed to get bookmarks")?;
+
+    if !output.status.success() {
+        anyhow::bail!(
+            "jj bookmark list failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let current_bookmark = get_current_bookmark().ok().flatten();
+
+    let mut bookmarks = Vec::new();
+    for line in stdout.lines() {
+        // Parse bookmark lines like "main: abc123 description"
+        if let Some(name) = line.split(':').next() {
+            let name = name.trim().to_string();
+            if !name.is_empty() {
+                let is_current = current_bookmark
+                    .as_ref()
+                    .map(|b| b == &name)
+                    .unwrap_or(false);
+                bookmarks.push(BookmarkInfo { name, is_current });
+            }
+        }
+    }
+
+    Ok(bookmarks)
+}
+
+pub fn checkout_bookmark(name: &str) -> Result<String> {
+    let output = Command::new("jj")
+        .args(&["new", name])
+        .output()
+        .context("Failed to checkout bookmark")?;
+
+    if !output.status.success() {
+        anyhow::bail!("jj new failed: {}", String::from_utf8_lossy(&output.stderr));
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}

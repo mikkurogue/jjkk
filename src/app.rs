@@ -1,5 +1,5 @@
 use anyhow::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent};
 
 use crate::config::{Settings, Theme};
 use crate::jj::repo::{FileStatus, JjRepo};
@@ -75,6 +75,9 @@ pub struct App {
     pub popup_state: PopupState,
     pub status_message: Option<String>,
     pub selected_file_index: usize,
+    pub selected_bookmark_index: usize,
+    pub selected_log_index: usize,
+    pub diff_scroll_offset: usize,
     pub scroll_offset: usize,
     pub repo: JjRepo,
     pub files: Vec<FileStatus>,
@@ -95,6 +98,9 @@ impl App {
             popup_state: PopupState::None,
             status_message: None,
             selected_file_index: 0,
+            selected_bookmark_index: 0,
+            selected_log_index: 0,
+            diff_scroll_offset: 0,
             scroll_offset: 0,
             repo,
             files: Vec::new(),
@@ -104,7 +110,10 @@ impl App {
 
     pub fn refresh_status(&mut self) -> Result<()> {
         self.files = crate::jj::status::get_working_copy_status()?;
-        self.selected_file_index = 0;
+        self.selected_file_index = self
+            .selected_file_index
+            .min(self.files.len().saturating_sub(1));
+        self.diff_scroll_offset = 0;
         self.update_diff()?;
         Ok(())
     }
@@ -130,7 +139,7 @@ impl App {
                 KeyCode::Esc => {
                     self.popup_state = PopupState::None;
                 }
-                KeyCode::Enter if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                KeyCode::Enter => {
                     let text = content.clone();
                     let cb = callback.clone();
                     self.popup_state = PopupState::None;
@@ -179,16 +188,72 @@ impl App {
                 self.current_tab = self.current_tab.prev();
             }
             KeyCode::Char('j') | KeyCode::Down => {
-                if self.current_tab == Tab::WorkingCopy && !self.files.is_empty() {
-                    self.selected_file_index =
-                        (self.selected_file_index + 1).min(self.files.len() - 1);
-                    self.update_diff()?;
+                match self.current_tab {
+                    Tab::WorkingCopy => {
+                        if !self.files.is_empty() {
+                            self.selected_file_index =
+                                (self.selected_file_index + 1).min(self.files.len() - 1);
+                            self.update_diff()?;
+                            self.diff_scroll_offset = 0; // Reset scroll when changing files
+                        }
+                    }
+                    Tab::Bookmarks => {
+                        if let Ok(bookmarks) = crate::jj::operations::get_bookmarks() {
+                            if !bookmarks.is_empty() {
+                                self.selected_bookmark_index =
+                                    (self.selected_bookmark_index + 1).min(bookmarks.len() - 1);
+                            }
+                        }
+                    }
+                    Tab::Log => {
+                        if let Ok(commits) =
+                            crate::jj::log::get_log(self.settings.ui.log_commits_count)
+                        {
+                            if !commits.is_empty() {
+                                self.selected_log_index =
+                                    (self.selected_log_index + 1).min(commits.len() - 1);
+                            }
+                        }
+                    }
                 }
             }
             KeyCode::Char('k') | KeyCode::Up => {
+                match self.current_tab {
+                    Tab::WorkingCopy => {
+                        self.selected_file_index = self.selected_file_index.saturating_sub(1);
+                        self.update_diff()?;
+                        self.diff_scroll_offset = 0; // Reset scroll when changing files
+                    }
+                    Tab::Bookmarks => {
+                        self.selected_bookmark_index =
+                            self.selected_bookmark_index.saturating_sub(1);
+                    }
+                    Tab::Log => {
+                        self.selected_log_index = self.selected_log_index.saturating_sub(1);
+                    }
+                }
+            }
+            KeyCode::Char('J') => {
+                // Shift+J for scrolling diff down
+                if self.current_tab == Tab::WorkingCopy && self.current_diff.is_some() {
+                    self.diff_scroll_offset += 1;
+                }
+            }
+            KeyCode::Char('K') => {
+                // Shift+K for scrolling diff up
                 if self.current_tab == Tab::WorkingCopy {
-                    self.selected_file_index = self.selected_file_index.saturating_sub(1);
-                    self.update_diff()?;
+                    self.diff_scroll_offset = self.diff_scroll_offset.saturating_sub(1);
+                }
+            }
+            KeyCode::Enter => {
+                match self.current_tab {
+                    Tab::Bookmarks => {
+                        self.handle_bookmark_checkout()?;
+                    }
+                    Tab::Log => {
+                        // TODO: Show commit details
+                    }
+                    _ => {}
                 }
             }
             KeyCode::Char('d') if self.current_tab == Tab::WorkingCopy => {
@@ -297,13 +362,26 @@ impl App {
     }
 
     fn handle_new_commit(&mut self) -> Result<()> {
-        match crate::jj::operations::new_commit() {
-            Ok(_) => {
-                self.set_status_message("Created new commit".to_string());
-                self.refresh_status()?;
+        // Check if working copy is already empty
+        match crate::jj::operations::is_working_copy_empty() {
+            Ok(true) => {
+                self.show_error("Already on an empty commit. Add changes first.".to_string());
+                return Ok(());
+            }
+            Ok(false) => {
+                // Working copy has changes, proceed with new commit
+                match crate::jj::operations::new_commit() {
+                    Ok(_) => {
+                        self.set_status_message("Created new commit".to_string());
+                        self.refresh_status()?;
+                    }
+                    Err(e) => {
+                        self.show_error(format!("Failed to create new commit: {}", e));
+                    }
+                }
             }
             Err(e) => {
-                self.show_error(format!("Failed to create new commit: {}", e));
+                self.show_error(format!("Failed to check working copy: {}", e));
             }
         }
         Ok(())
@@ -346,5 +424,21 @@ impl App {
 
     pub fn show_error(&mut self, message: String) {
         self.popup_state = PopupState::Error { message };
+    }
+
+    fn handle_bookmark_checkout(&mut self) -> Result<()> {
+        let bookmarks = crate::jj::operations::get_bookmarks()?;
+        if let Some(bookmark) = bookmarks.get(self.selected_bookmark_index) {
+            match crate::jj::operations::checkout_bookmark(&bookmark.name) {
+                Ok(_) => {
+                    self.set_status_message(format!("Checked out bookmark: {}", bookmark.name));
+                    self.refresh_status()?;
+                }
+                Err(e) => {
+                    self.show_error(format!("Failed to checkout bookmark: {}", e));
+                }
+            }
+        }
+        Ok(())
     }
 }

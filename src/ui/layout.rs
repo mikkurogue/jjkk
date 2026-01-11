@@ -6,6 +6,8 @@ use ratatui::{
 };
 
 use crate::app::{App, PopupState, Tab};
+use crate::ui::tabs::bookmarks::render_bookmarks;
+use crate::ui::tabs::log::render_log;
 use crate::ui::tabs::working_copy::render_working_copy;
 use crate::ui::widgets::popup::{render_error_popup, render_input_popup};
 use crate::ui::widgets::status_bar::render_status_bar;
@@ -71,10 +73,10 @@ fn render_tab_content(f: &mut Frame, app: &App, area: Rect) {
             render_working_copy(f, app, area);
         }
         Tab::Bookmarks => {
-            render_placeholder(f, app, "Bookmarks Tab - Coming Soon", area);
+            render_bookmarks(f, app, area);
         }
         Tab::Log => {
-            render_placeholder(f, app, "Log Tab - Coming Soon", area);
+            render_log(f, app, area);
         }
     }
 }

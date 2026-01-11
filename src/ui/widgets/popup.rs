@@ -21,7 +21,7 @@ pub fn render_input_popup(f: &mut Frame, app: &App, title: &str, content: &str, 
         Line::from(content),
         Line::from(""),
         Line::from(Span::styled(
-            "Ctrl+Enter to confirm | Esc to cancel",
+            "Enter to confirm | Esc to cancel",
             Style::default().fg(app.theme.subtext0),
         )),
     ];
