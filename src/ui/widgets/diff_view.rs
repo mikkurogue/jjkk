@@ -1,0 +1,1 @@
+// Diff view widget - placeholder

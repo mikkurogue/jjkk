@@ -1,0 +1,1 @@
+// JJ log operations - placeholder
