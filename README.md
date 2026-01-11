@@ -4,7 +4,7 @@
 
 **jjkk** brings the power of [lazygit](https://github.com/jesseduffield/lazygit)-style interfaces to Jujutsu VCS. Navigate your repository, stage changes, create commits, and manage bookmarks—all from a sleek, keyboard-driven TUI.
 
-![jjkk screenshot placeholder]
+![./jjkk-showcase.png]
 
 ## Features
 
@@ -48,6 +48,7 @@ jjkk
 - `1` / `2` / `3` - Switch to Working Copy / Bookmarks / Log tab
 - `Tab` / `Shift+Tab` - Cycle through tabs
 - `R` - Refresh status
+- `X` - Restore
 
 #### Working Copy Tab
 - `j` / `k` (or `↓` / `↑`) - Navigate files

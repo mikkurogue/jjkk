@@ -56,6 +56,12 @@ pub enum PopupState {
         cursor_position: usize,
         callback:        PopupCallback,
     },
+    BookmarkSelect {
+        content: String,
+        cursor_position: usize,
+        available_bookmarks: Vec<String>,
+        selected_index: usize,
+    },
     Error {
         message: String,
     },
@@ -67,7 +73,6 @@ pub enum PopupCallback {
     Describe,
     Commit,
     Rebase,
-    Bookmark,
 }
 
 pub struct App {
@@ -78,6 +83,8 @@ pub struct App {
     pub popup_state: PopupState,
     pub status_message: Option<String>,
     pub status_message_timestamp: Option<Instant>,
+    pub loading_message: Option<String>,
+    pub loading_start: Option<Instant>,
     pub selected_file_index: usize,
     pub selected_bookmark_index: usize,
     pub selected_log_index: usize,
@@ -104,6 +111,8 @@ impl App {
             popup_state: PopupState::None,
             status_message: None,
             status_message_timestamp: None,
+            loading_message: None,
+            loading_start: None,
             selected_file_index: 0,
             selected_bookmark_index: 0,
             selected_log_index: 0,
@@ -143,6 +152,14 @@ impl App {
             ..
         } = self.popup_state
         {
+            // Helper to get byte position from character position
+            let char_to_byte = |s: &str, char_pos: usize| -> usize {
+                s.char_indices()
+                    .nth(char_pos)
+                    .map(|(byte_pos, _)| byte_pos)
+                    .unwrap_or(s.len())
+            };
+
             match key.code {
                 KeyCode::Esc => {
                     self.popup_state = PopupState::None;
@@ -150,7 +167,8 @@ impl App {
                 KeyCode::Enter => {
                     // Shift+Enter inserts a newline
                     if key.modifiers.contains(KeyModifiers::SHIFT) {
-                        content.insert(*cursor_position, '\n');
+                        let byte_pos = char_to_byte(content, *cursor_position);
+                        content.insert(byte_pos, '\n');
                         *cursor_position += 1;
                     } else {
                         // Regular Enter submits the form
@@ -161,26 +179,133 @@ impl App {
                     }
                 }
                 KeyCode::Char(c) => {
-                    content.insert(*cursor_position, c);
+                    let byte_pos = char_to_byte(content, *cursor_position);
+                    content.insert(byte_pos, c);
                     *cursor_position += 1;
                 }
                 KeyCode::Backspace => {
                     if *cursor_position > 0 {
                         *cursor_position -= 1;
-                        content.remove(*cursor_position);
+                        let byte_pos = char_to_byte(content, *cursor_position);
+                        content.remove(byte_pos);
                     }
                 }
                 KeyCode::Left => {
                     *cursor_position = cursor_position.saturating_sub(1);
                 }
                 KeyCode::Right => {
-                    *cursor_position = (*cursor_position + 1).min(content.len());
+                    let char_len = content.chars().count();
+                    *cursor_position = (*cursor_position + 1).min(char_len);
                 }
                 KeyCode::Home => {
                     *cursor_position = 0;
                 }
                 KeyCode::End => {
-                    *cursor_position = content.len();
+                    *cursor_position = content.chars().count();
+                }
+                _ => {}
+            }
+            return Ok(());
+        }
+
+        // Handle bookmark selection popup
+        if let PopupState::BookmarkSelect {
+            ref mut content,
+            ref mut cursor_position,
+            ref available_bookmarks,
+            ref mut selected_index,
+        } = self.popup_state
+        {
+            // Helper to get byte position from character position
+            let char_to_byte = |s: &str, char_pos: usize| -> usize {
+                s.char_indices()
+                    .nth(char_pos)
+                    .map(|(byte_pos, _)| byte_pos)
+                    .unwrap_or(s.len())
+            };
+
+            // Filter bookmarks based on current content
+            let filtered: Vec<&String> = if content.is_empty() {
+                available_bookmarks.iter().collect()
+            } else {
+                available_bookmarks
+                    .iter()
+                    .filter(|b| b.to_lowercase().contains(&content.to_lowercase()))
+                    .collect()
+            };
+
+            match key.code {
+                KeyCode::Esc => {
+                    self.popup_state = PopupState::None;
+                }
+                KeyCode::Enter => {
+                    // If there's filtered content and user selected from list, use that
+                    let bookmark_name = if !filtered.is_empty() && *selected_index < filtered.len()
+                    {
+                        filtered[*selected_index].clone()
+                    } else if !content.is_empty() {
+                        // Otherwise use the typed content as new bookmark name
+                        content.clone()
+                    } else {
+                        // Empty input, do nothing
+                        self.popup_state = PopupState::None;
+                        return Ok(());
+                    };
+
+                    self.popup_state = PopupState::None;
+                    match crate::jj::operations::set_bookmark(&bookmark_name) {
+                        Ok(_) => {
+                            self.set_status_message(format!("Set bookmark: {bookmark_name}"));
+                            self.refresh_status()?;
+                        }
+                        Err(e) => {
+                            self.show_error(format!("Failed to set bookmark: {e}"));
+                        }
+                    }
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    if !filtered.is_empty() {
+                        *selected_index = selected_index.saturating_sub(1);
+                    }
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    if !filtered.is_empty() {
+                        *selected_index = (*selected_index + 1).min(filtered.len() - 1);
+                    }
+                }
+                KeyCode::Tab => {
+                    // Autocomplete with selected bookmark
+                    if !filtered.is_empty() && *selected_index < filtered.len() {
+                        *content = filtered[*selected_index].clone();
+                        *cursor_position = content.chars().count();
+                    }
+                }
+                KeyCode::Char(c) => {
+                    let byte_pos = char_to_byte(content, *cursor_position);
+                    content.insert(byte_pos, c);
+                    *cursor_position += 1;
+                    *selected_index = 0; // Reset selection when typing
+                }
+                KeyCode::Backspace => {
+                    if *cursor_position > 0 {
+                        *cursor_position -= 1;
+                        let byte_pos = char_to_byte(content, *cursor_position);
+                        content.remove(byte_pos);
+                        *selected_index = 0; // Reset selection when deleting
+                    }
+                }
+                KeyCode::Left => {
+                    *cursor_position = cursor_position.saturating_sub(1);
+                }
+                KeyCode::Right => {
+                    let char_len = content.chars().count();
+                    *cursor_position = (*cursor_position + 1).min(char_len);
+                }
+                KeyCode::Home => {
+                    *cursor_position = 0;
+                }
+                KeyCode::End => {
+                    *cursor_position = content.chars().count();
                 }
                 _ => {}
             }
@@ -376,11 +501,17 @@ impl App {
     }
 
     fn show_bookmark_popup(&mut self) {
-        self.popup_state = PopupState::Input {
-            title:           "Set bookmark".to_string(),
-            content:         String::new(),
+        // Fetch available bookmarks
+        let bookmarks = match crate::jj::operations::get_bookmarks() {
+            Ok(bookmarks) => bookmarks.into_iter().map(|b| b.name).collect(),
+            Err(_) => Vec::new(),
+        };
+
+        self.popup_state = PopupState::BookmarkSelect {
+            content: String::new(),
             cursor_position: 0,
-            callback:        PopupCallback::Bookmark,
+            available_bookmarks: bookmarks,
+            selected_index: 0,
         };
     }
 
@@ -411,14 +542,6 @@ impl App {
                 }
                 Err(e) => {
                     self.show_error(format!("Failed to rebase: {e}"));
-                }
-            },
-            PopupCallback::Bookmark => match crate::jj::operations::set_bookmark(text) {
-                Ok(_) => {
-                    self.set_status_message(format!("Set bookmark: {text}"));
-                }
-                Err(e) => {
-                    self.show_error(format!("Failed to set bookmark: {e}"));
                 }
             },
         }
@@ -452,12 +575,15 @@ impl App {
     }
 
     fn handle_fetch(&mut self) -> Result<()> {
+        self.show_loading("Fetching from remote".to_string());
         match crate::jj::operations::git_fetch() {
             Ok(_) => {
+                self.clear_loading();
                 self.set_status_message("Fetched from remote".to_string());
                 self.refresh_status()?;
             }
             Err(e) => {
+                self.clear_loading();
                 self.show_error(format!("Failed to fetch: {e}"));
             }
         }
@@ -465,16 +591,20 @@ impl App {
     }
 
     fn handle_push(&mut self) -> Result<()> {
+        self.show_loading("Pushing to remote".to_string());
         let bookmark = crate::jj::operations::get_current_bookmark().ok().flatten();
         match crate::jj::operations::git_push(bookmark.as_deref()) {
             Ok(_) => {
+                self.clear_loading();
                 let msg = bookmark.map_or_else(
                     || "Pushed current change (created temporary bookmark)".to_string(),
                     |b| format!("Pushed bookmark: {b}"),
                 );
                 self.set_status_message(msg);
+                self.refresh_status()?;
             }
             Err(e) => {
+                self.clear_loading();
                 self.show_error(format!("Failed to push: {e}"));
             }
         }
@@ -493,7 +623,7 @@ impl App {
 
     pub fn update_status_message_timeout(&mut self) {
         if let Some(timestamp) = self.status_message_timestamp {
-            if timestamp.elapsed().as_secs() >= 5 {
+            if timestamp.elapsed().as_secs() >= 2 {
                 self.clear_status_message();
             }
         }
@@ -501,6 +631,27 @@ impl App {
 
     pub fn show_error(&mut self, message: String) {
         self.popup_state = PopupState::Error { message };
+    }
+
+    pub fn show_loading(&mut self, message: String) {
+        self.loading_message = Some(message);
+        self.loading_start = Some(Instant::now());
+    }
+
+    pub fn clear_loading(&mut self) {
+        self.loading_message = None;
+        self.loading_start = None;
+    }
+
+    pub fn get_spinner_char(&self) -> char {
+        if let Some(start) = self.loading_start {
+            let frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+            let elapsed = start.elapsed().as_millis();
+            let frame_index = (elapsed / 80) as usize % frames.len();
+            frames[frame_index]
+        } else {
+            ' '
+        }
     }
 
     fn handle_bookmark_checkout(&mut self) -> Result<()> {

@@ -31,6 +31,7 @@ use crate::{
         },
         widgets::{
             popup::{
+                render_bookmark_select_popup,
                 render_error_popup,
                 render_help_popup,
                 render_input_popup,
@@ -73,6 +74,22 @@ pub fn render_ui(f: &mut Frame, app: &App) {
             ..
         } => {
             render_input_popup(f, app, title, content, *cursor_position, size);
+        }
+        PopupState::BookmarkSelect {
+            content,
+            cursor_position,
+            available_bookmarks,
+            selected_index,
+        } => {
+            render_bookmark_select_popup(
+                f,
+                app,
+                content,
+                *cursor_position,
+                available_bookmarks,
+                *selected_index,
+                size,
+            );
         }
         PopupState::Error { message } => {
             render_error_popup(f, app, message, size);

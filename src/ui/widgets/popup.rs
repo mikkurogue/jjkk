@@ -1,3 +1,4 @@
+use crossterm::cursor::SetCursorStyle;
 use ratatui::{
     Frame,
     layout::{
@@ -19,6 +20,8 @@ use ratatui::{
         Block,
         Borders,
         Clear,
+        List,
+        ListItem,
         Paragraph,
         Wrap,
     },
@@ -156,6 +159,7 @@ pub fn render_help_popup(f: &mut Frame, app: &App, area: Rect) {
         Line::from("  c           Commit working copy"),
         Line::from("  n           Create new commit"),
         Line::from("  R           Refresh status"),
+        Line::from("  X           Restore working copy"),
         Line::from(""),
         Line::from(Span::styled(
             "Remote Operations",
@@ -197,4 +201,94 @@ pub fn render_help_popup(f: &mut Frame, app: &App, area: Rect) {
 
     f.render_widget(Clear, popup_area);
     f.render_widget(paragraph, popup_area);
+}
+
+pub fn render_bookmark_select_popup(
+    f: &mut Frame,
+    app: &App,
+    content: &str,
+    cursor_position: usize,
+    available_bookmarks: &[String],
+    selected_index: usize,
+    area: Rect,
+) {
+    let popup_area = centered_rect(60, 60, area);
+
+    let block = Block::default()
+        .title("Set Bookmark")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(app.theme.lavender))
+        .style(Style::default().bg(app.theme.surface0));
+
+    // Create layout: input field + suggestions list
+    let inner_area = block.inner(popup_area);
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3), // Input field
+            Constraint::Min(5),    // Suggestions list
+            Constraint::Length(2), // Help text
+        ])
+        .split(inner_area);
+
+    // Render the input field with cursor
+    let content_with_cursor = if content.is_empty() {
+        "█".to_string()
+    } else {
+        let mut chars: Vec<char> = content.chars().collect();
+        if cursor_position >= chars.len() {
+            chars.push('█');
+        } else {
+            chars.insert(cursor_position, '█');
+        }
+        chars.into_iter().collect()
+    };
+
+    let input_text = vec![Line::from(content_with_cursor)];
+    let input_paragraph = Paragraph::new(input_text)
+        .style(Style::default().fg(app.theme.text))
+        .wrap(Wrap { trim: false });
+
+    // Filter bookmarks
+    let filtered: Vec<&String> = if content.is_empty() {
+        available_bookmarks.iter().collect()
+    } else {
+        available_bookmarks
+            .iter()
+            .filter(|b| b.to_lowercase().contains(&content.to_lowercase()))
+            .collect()
+    };
+
+    // Render suggestions list
+    let suggestions: Vec<ListItem> = filtered
+        .iter()
+        .enumerate()
+        .map(|(i, bookmark)| {
+            let style = if i == selected_index {
+                Style::default()
+                    .fg(app.theme.base)
+                    .bg(app.theme.lavender)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(app.theme.text)
+            };
+            ListItem::new(format!("  {}", bookmark)).style(style)
+        })
+        .collect();
+
+    let suggestions_list = List::new(suggestions).style(Style::default().fg(app.theme.text));
+
+    // Help text
+    let help = Paragraph::new(vec![Line::from(Span::styled(
+        "↑↓/jk: navigate | Tab: autocomplete | Enter: confirm | Esc: cancel",
+        Style::default().fg(app.theme.subtext0),
+    ))])
+    .alignment(Alignment::Center);
+
+    // Render everything
+    f.render_widget(Clear, popup_area);
+    f.render_widget(block, popup_area);
+    f.render_widget(input_paragraph, chunks[0]);
+    f.render_widget(suggestions_list, chunks[1]);
+    f.render_widget(help, chunks[2]);
 }
