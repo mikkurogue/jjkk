@@ -4,7 +4,8 @@
 
 **jjkk** brings the power of [lazygit](https://github.com/jesseduffield/lazygit)-style interfaces to Jujutsu VCS. Navigate your repository, stage changes, create commits, and manage bookmarks—all from a sleek, keyboard-driven TUI.
 
-![./jjkk-showcase.png]
+<img width="2531" height="1344" alt="jjkk-showcase" src="https://github.com/user-attachments/assets/3a68d3e1-864f-42a2-b8cf-3570d2d5daf3" />
+
 
 ## Features
 
