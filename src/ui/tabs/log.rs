@@ -1,9 +1,21 @@
 use ratatui::{
     Frame,
     layout::Rect,
-    style::{Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    style::{
+        Modifier,
+        Style,
+    },
+    text::{
+        Line,
+        Span,
+    },
+    widgets::{
+        Block,
+        Borders,
+        List,
+        ListItem,
+        Paragraph,
+    },
 };
 
 use crate::app::App;
@@ -14,7 +26,7 @@ pub fn render_log(f: &mut Frame, app: &App, area: Rect) {
     let commits = match crate::jj::log::get_log(limit) {
         Ok(c) => c,
         Err(e) => {
-            let error_text = format!("Failed to get log: {}", e);
+            let error_text = format!("Failed to get log: {e}");
             let paragraph = Paragraph::new(error_text)
                 .block(
                     Block::default()
@@ -90,7 +102,7 @@ pub fn render_log(f: &mut Frame, app: &App, area: Rect) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(format!("Log (last {} commits, j/k to navigate)", limit))
+                .title(format!("Log (last {limit} commits, j/k to navigate)"))
                 .border_style(Style::default().fg(app.theme.surface1)),
         )
         .style(Style::default().bg(app.theme.base));

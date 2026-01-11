@@ -1,14 +1,39 @@
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
+    layout::{
+        Constraint,
+        Direction,
+        Layout,
+        Rect,
+    },
+    style::{
+        Color,
+        Modifier,
+        Style,
+    },
+    text::{
+        Line,
+        Span,
+    },
+    widgets::{
+        Block,
+        Borders,
+        List,
+        ListItem,
+        Paragraph,
+        Wrap,
+    },
 };
-use syntect::{easy::HighlightLines, highlighting::ThemeSet, parsing::SyntaxSet};
+use syntect::{
+    easy::HighlightLines,
+    highlighting::ThemeSet,
+    parsing::SyntaxSet,
+};
 
-use crate::app::App;
-use crate::jj::repo::ChangeType;
+use crate::{
+    app::App,
+    jj::repo::ChangeType,
+};
 
 pub fn render_working_copy(f: &mut Frame, app: &App, area: Rect) {
     // Split into left (file list) and right (diff view)
@@ -67,104 +92,111 @@ fn render_file_list(f: &mut Frame, app: &App, area: Rect) {
 }
 
 fn render_diff_view(f: &mut Frame, app: &App, area: Rect) {
-    let lines: Vec<Line> = if let Some(ref diff) = app.current_diff {
-        // Get file extension for syntax detection
-        let file_path = app
-            .files
-            .get(app.selected_file_index)
-            .map(|f| f.path.as_str());
+    let lines: Vec<Line> = app.current_diff.as_ref().map_or_else(
+        || {
+            if app.files.is_empty() {
+                vec![Line::from("No changes in working copy")]
+            } else {
+                vec![Line::from("Select a file to view diff")]
+            }
+        },
+        |diff| {
+            // Get file extension for syntax detection
+            let file_path = app
+                .files
+                .get(app.selected_file_index)
+                .map(|f| f.path.as_str());
 
-        // Initialize syntect
-        let ps = SyntaxSet::load_defaults_newlines();
-        let ts = ThemeSet::load_defaults();
-        let theme = &ts.themes["base16-ocean.dark"];
+            // Initialize syntect
+            let ps = SyntaxSet::load_defaults_newlines();
+            let ts = ThemeSet::load_defaults();
+            let theme = &ts.themes["base16-ocean.dark"];
 
-        // Try to detect syntax from file path
-        let syntax = if let Some(path) = file_path {
-            ps.find_syntax_for_file(path).ok().flatten()
-        } else {
-            None
-        }
-        .or_else(|| Some(ps.find_syntax_plain_text()));
+            // // Try to detect syntax from file path
+            let syntax = file_path
+                .and_then(|path| ps.find_syntax_for_file(path).ok().flatten())
+                .or_else(|| Some(ps.find_syntax_plain_text()));
 
-        // Parse diff and apply syntax highlighting
-        diff.lines()
-            .map(|line| {
-                // Check for diff-specific lines first
-                if line.starts_with("+++") || line.starts_with("---") {
-                    // File headers
-                    Line::from(Span::styled(line, Style::default().fg(app.theme.lavender)))
-                } else if line.starts_with("@@") {
-                    // Hunk header
-                    Line::from(Span::styled(
-                        line,
-                        Style::default()
-                            .fg(app.theme.blue)
-                            .add_modifier(Modifier::BOLD),
-                    ))
-                } else if line.starts_with("diff ") || line.starts_with("index ") {
-                    // Diff header
-                    Line::from(Span::styled(line, Style::default().fg(app.theme.lavender)))
-                } else if line.starts_with('+') {
-                    // Added line - apply syntax highlighting to the content (skip the + prefix)
-                    let content = &line[1..];
-                    if let Some(ref syntax) = syntax {
-                        let mut h = HighlightLines::new(syntax, theme);
-                        let ranges = h.highlight_line(content, &ps).unwrap_or_default();
-                        let spans: Vec<Span> = std::iter::once(Span::styled(
-                            "+",
-                            Style::default().fg(app.theme.green),
+            // Parse diff and apply syntax highlighting
+            diff.lines()
+                .map(|line| {
+                    // Check for diff-specific lines first
+                    if line.starts_with("+++") || line.starts_with("---") {
+                        // File headers
+                        Line::from(Span::styled(line, Style::default().fg(app.theme.lavender)))
+                    } else if line.starts_with("@@") {
+                        // Hunk header
+                        Line::from(Span::styled(
+                            line,
+                            Style::default()
+                                .fg(app.theme.blue)
+                                .add_modifier(Modifier::BOLD),
                         ))
-                        .chain(ranges.into_iter().map(|(style, text)| {
-                            let color = syntect_to_ratatui_color(style.foreground);
-                            Span::styled(text, Style::default().fg(color))
-                        }))
-                        .collect();
-                        Line::from(spans).style(Style::default().fg(app.theme.green))
-                    } else {
-                        Line::from(Span::styled(line, Style::default().fg(app.theme.green)))
-                    }
-                } else if line.starts_with('-') {
-                    // Removed line - apply syntax highlighting to the content (skip the - prefix)
-                    let content = &line[1..];
-                    if let Some(ref syntax) = syntax {
-                        let mut h = HighlightLines::new(syntax, theme);
-                        let ranges = h.highlight_line(content, &ps).unwrap_or_default();
-                        let spans: Vec<Span> =
-                            std::iter::once(Span::styled("-", Style::default().fg(app.theme.red)))
+                    } else if line.starts_with("diff ") || line.starts_with("index ") {
+                        // Diff header
+                        Line::from(Span::styled(line, Style::default().fg(app.theme.lavender)))
+                    } else if let Some(content) = line.strip_prefix('+') {
+                        // Added line - apply syntax highlighting to the content (skip the + prefix)
+                        syntax.map_or_else(
+                            || Line::from(Span::styled(line, Style::default().fg(app.theme.green))),
+                            |syntax| {
+                                let mut h = HighlightLines::new(syntax, theme);
+                                let ranges = h.highlight_line(content, &ps).unwrap_or_default();
+                                let spans: Vec<Span> = std::iter::once(Span::styled(
+                                    "+",
+                                    Style::default().fg(app.theme.green),
+                                ))
                                 .chain(ranges.into_iter().map(|(style, text)| {
                                     let color = syntect_to_ratatui_color(style.foreground);
                                     Span::styled(text, Style::default().fg(color))
                                 }))
                                 .collect();
-                        Line::from(spans).style(Style::default().fg(app.theme.red))
+                                Line::from(spans).style(Style::default().fg(app.theme.green))
+                            },
+                        )
+                    } else if let Some(content) = line.strip_prefix('-') {
+                        // Removed line - apply syntax highlighting to the content (skip the -
+                        // prefix)
+
+                        syntax.map_or_else(
+                            || Line::from(Span::styled(line, Style::default().fg(app.theme.red))),
+                            |syntax| {
+                                let mut h = HighlightLines::new(syntax, theme);
+                                let ranges = h.highlight_line(content, &ps).unwrap_or_default();
+                                let spans: Vec<Span> = std::iter::once(Span::styled(
+                                    "-",
+                                    Style::default().fg(app.theme.red),
+                                ))
+                                .chain(ranges.into_iter().map(|(style, text)| {
+                                    let color = syntect_to_ratatui_color(style.foreground);
+                                    Span::styled(text, Style::default().fg(color))
+                                }))
+                                .collect();
+                                Line::from(spans).style(Style::default().fg(app.theme.red))
+                            },
+                        )
                     } else {
-                        Line::from(Span::styled(line, Style::default().fg(app.theme.red)))
+                        // Context line - apply syntax highlighting
+                        syntax.map_or_else(
+                            || Line::from(Span::styled(line, Style::default().fg(app.theme.text))),
+                            |syntax| {
+                                let mut h = HighlightLines::new(syntax, theme);
+                                let ranges = h.highlight_line(line, &ps).unwrap_or_default();
+                                let spans: Vec<Span> = ranges
+                                    .into_iter()
+                                    .map(|(style, text)| {
+                                        let color = syntect_to_ratatui_color(style.foreground);
+                                        Span::styled(text, Style::default().fg(color))
+                                    })
+                                    .collect();
+                                Line::from(spans)
+                            },
+                        )
                     }
-                } else {
-                    // Context line - apply syntax highlighting
-                    if let Some(ref syntax) = syntax {
-                        let mut h = HighlightLines::new(syntax, theme);
-                        let ranges = h.highlight_line(line, &ps).unwrap_or_default();
-                        let spans: Vec<Span> = ranges
-                            .into_iter()
-                            .map(|(style, text)| {
-                                let color = syntect_to_ratatui_color(style.foreground);
-                                Span::styled(text, Style::default().fg(color))
-                            })
-                            .collect();
-                        Line::from(spans)
-                    } else {
-                        Line::from(Span::styled(line, Style::default().fg(app.theme.text)))
-                    }
-                }
-            })
-            .collect()
-    } else if app.files.is_empty() {
-        vec![Line::from("No changes in working copy")]
-    } else {
-        vec![Line::from("Select a file to view diff")]
-    };
+                })
+                .collect()
+        },
+    );
 
     // Calculate visible area height (subtract 2 for borders)
     let content_height = area.height.saturating_sub(2) as usize;
@@ -181,10 +213,7 @@ fn render_diff_view(f: &mut Frame, app: &App, area: Rect) {
         .collect();
 
     let title = if app.current_diff.is_some() && max_scroll > 0 {
-        format!(
-            "Diff (Shift+J/K to scroll, {}/{})",
-            scroll_offset, max_scroll
-        )
+        format!("Diff (Shift+J/K to scroll, {scroll_offset}/{max_scroll})")
     } else {
         "Diff".to_string()
     };
@@ -203,6 +232,6 @@ fn render_diff_view(f: &mut Frame, app: &App, area: Rect) {
 }
 
 // Helper function to convert syntect color to ratatui color
-fn syntect_to_ratatui_color(color: syntect::highlighting::Color) -> Color {
+const fn syntect_to_ratatui_color(color: syntect::highlighting::Color) -> Color {
     Color::Rgb(color.r, color.g, color.b)
 }

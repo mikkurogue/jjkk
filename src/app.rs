@@ -1,47 +1,45 @@
 use anyhow::Result;
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{
+    KeyCode,
+    KeyEvent,
+};
 
-use crate::config::{Settings, Theme};
-use crate::jj::repo::{FileStatus, JjRepo};
+use crate::{
+    config::{
+        Settings,
+        Theme,
+    },
+    jj::repo::{
+        FileStatus,
+        JjRepo,
+    },
+};
 
+/// Each tab of the ui that can be selected
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
+    /// Current working copy
     WorkingCopy,
+    /// Known Bookmarks tab
     Bookmarks,
+    /// Log tab
     Log,
 }
 
 impl Tab {
-    pub fn next(self) -> Self {
+    pub const fn next(self) -> Self {
         match self {
-            Tab::WorkingCopy => Tab::Bookmarks,
-            Tab::Bookmarks => Tab::Log,
-            Tab::Log => Tab::WorkingCopy,
+            Self::WorkingCopy => Self::Bookmarks,
+            Self::Bookmarks => Self::Log,
+            Self::Log => Self::WorkingCopy,
         }
     }
 
-    pub fn prev(self) -> Self {
+    pub const fn prev(self) -> Self {
         match self {
-            Tab::WorkingCopy => Tab::Log,
-            Tab::Bookmarks => Tab::WorkingCopy,
-            Tab::Log => Tab::Bookmarks,
-        }
-    }
-
-    pub fn from_index(index: usize) -> Option<Self> {
-        match index {
-            0 => Some(Tab::WorkingCopy),
-            1 => Some(Tab::Bookmarks),
-            2 => Some(Tab::Log),
-            _ => None,
-        }
-    }
-
-    pub fn title(&self) -> &str {
-        match self {
-            Tab::WorkingCopy => "Working Copy",
-            Tab::Bookmarks => "Bookmarks",
-            Tab::Log => "Log",
+            Self::WorkingCopy => Self::Log,
+            Self::Bookmarks => Self::WorkingCopy,
+            Self::Log => Self::Bookmarks,
         }
     }
 }
@@ -50,8 +48,8 @@ impl Tab {
 pub enum PopupState {
     None,
     Input {
-        title: String,
-        content: String,
+        title:    String,
+        content:  String,
         callback: PopupCallback,
     },
     Error {
@@ -79,8 +77,10 @@ pub struct App {
     pub selected_bookmark_index: usize,
     pub selected_log_index: usize,
     pub diff_scroll_offset: usize,
-    pub scroll_offset: usize,
-    pub repo: JjRepo,
+    /// Marked with underscore to indicate it's currently unused
+    _scroll_offset: usize,
+    /// Marked with underscore to indicate it's currently unused
+    _repo: JjRepo,
     pub files: Vec<FileStatus>,
     pub current_diff: Option<String>,
 }
@@ -102,8 +102,8 @@ impl App {
             selected_bookmark_index: 0,
             selected_log_index: 0,
             diff_scroll_offset: 0,
-            scroll_offset: 0,
-            repo,
+            _scroll_offset: 0,
+            _repo: repo,
             files: Vec::new(),
             current_diff: None,
         })
@@ -142,9 +142,9 @@ impl App {
                 }
                 KeyCode::Enter => {
                     let text = content.clone();
-                    let cb = callback.clone();
+                    let cb = callback;
                     self.popup_state = PopupState::None;
-                    self.execute_popup_callback(cb, text)?;
+                    self.execute_popup_callback(cb, &text)?;
                 }
                 KeyCode::Char(c) => {
                     content.push(c);
@@ -169,9 +169,9 @@ impl App {
         }
 
         // Handle help popup
-        if let PopupState::Help = self.popup_state {
+        if matches!(self.popup_state, PopupState::Help) {
             match key.code {
-                KeyCode::Char('?') | KeyCode::Esc | KeyCode::Char('q') => {
+                KeyCode::Char('?' | 'q') | KeyCode::Esc => {
                     self.popup_state = PopupState::None;
                 }
                 _ => {}
@@ -213,21 +213,20 @@ impl App {
                         }
                     }
                     Tab::Bookmarks => {
-                        if let Ok(bookmarks) = crate::jj::operations::get_bookmarks() {
-                            if !bookmarks.is_empty() {
-                                self.selected_bookmark_index =
-                                    (self.selected_bookmark_index + 1).min(bookmarks.len() - 1);
-                            }
+                        if let Ok(bookmarks) = crate::jj::operations::get_bookmarks()
+                            && !bookmarks.is_empty()
+                        {
+                            self.selected_bookmark_index =
+                                (self.selected_bookmark_index + 1).min(bookmarks.len() - 1);
                         }
                     }
                     Tab::Log => {
                         if let Ok(commits) =
                             crate::jj::log::get_log(self.settings.ui.log_commits_count)
+                            && !commits.is_empty()
                         {
-                            if !commits.is_empty() {
-                                self.selected_log_index =
-                                    (self.selected_log_index + 1).min(commits.len() - 1);
-                            }
+                            self.selected_log_index =
+                                (self.selected_log_index + 1).min(commits.len() - 1);
                         }
                     }
                 }
@@ -265,10 +264,9 @@ impl App {
                     Tab::Bookmarks => {
                         self.handle_bookmark_checkout()?;
                     }
-                    Tab::Log => {
+                    Tab::Log | Tab::WorkingCopy => {
                         // TODO: Show commit details
                     }
-                    _ => {}
                 }
             }
             KeyCode::Char('d') if self.current_tab == Tab::WorkingCopy => {
@@ -297,79 +295,96 @@ impl App {
                 self.refresh_status()?;
                 self.set_status_message("Refreshed".to_string());
             }
+            KeyCode::Char('X') => {
+                // Capital X to restore the working copy (aka discard changes)
+                self.restore_working_copy()?;
+                self.set_status_message("Restored working copy".to_string());
+            }
             _ => {}
         }
 
         Ok(())
     }
 
+    fn restore_working_copy(&mut self) -> Result<()> {
+        match crate::jj::operations::restore_working_copy() {
+            Ok(_) => {
+                self.refresh_status()?;
+            }
+            Err(e) => {
+                self.show_error(format!("Failed to restore working copy: {e}"));
+            }
+        }
+        Ok(())
+    }
+
     fn show_describe_popup(&mut self) {
         self.popup_state = PopupState::Input {
-            title: "Describe".to_string(),
-            content: String::new(),
+            title:    "Describe".to_string(),
+            content:  String::new(),
             callback: PopupCallback::Describe,
         };
     }
 
     fn show_commit_popup(&mut self) {
         self.popup_state = PopupState::Input {
-            title: "Commit".to_string(),
-            content: String::new(),
+            title:    "Commit".to_string(),
+            content:  String::new(),
             callback: PopupCallback::Commit,
         };
     }
 
     fn show_rebase_popup(&mut self) {
         self.popup_state = PopupState::Input {
-            title: "Rebase destination".to_string(),
-            content: String::new(),
+            title:    "Rebase destination".to_string(),
+            content:  String::new(),
             callback: PopupCallback::Rebase,
         };
     }
 
     fn show_bookmark_popup(&mut self) {
         self.popup_state = PopupState::Input {
-            title: "Set bookmark".to_string(),
-            content: String::new(),
+            title:    "Set bookmark".to_string(),
+            content:  String::new(),
             callback: PopupCallback::Bookmark,
         };
     }
 
-    fn execute_popup_callback(&mut self, callback: PopupCallback, text: String) -> Result<()> {
+    fn execute_popup_callback(&mut self, callback: PopupCallback, text: &str) -> Result<()> {
         match callback {
-            PopupCallback::Describe => match crate::jj::operations::describe(&text) {
+            PopupCallback::Describe => match crate::jj::operations::describe(text) {
                 Ok(_) => {
                     self.set_status_message("Description updated".to_string());
                     self.refresh_status()?;
                 }
                 Err(e) => {
-                    self.show_error(format!("Failed to describe: {}", e));
+                    self.show_error(format!("Failed to describe: {e}"));
                 }
             },
-            PopupCallback::Commit => match crate::jj::operations::commit(&text) {
+            PopupCallback::Commit => match crate::jj::operations::commit(text) {
                 Ok(_) => {
                     self.set_status_message("Committed successfully".to_string());
                     self.refresh_status()?;
                 }
                 Err(e) => {
-                    self.show_error(format!("Failed to commit: {}", e));
+                    self.show_error(format!("Failed to commit: {e}"));
                 }
             },
-            PopupCallback::Rebase => match crate::jj::operations::rebase(&text) {
+            PopupCallback::Rebase => match crate::jj::operations::rebase(text) {
                 Ok(_) => {
-                    self.set_status_message(format!("Rebased to {}", text));
+                    self.set_status_message(format!("Rebased to {text}"));
                     self.refresh_status()?;
                 }
                 Err(e) => {
-                    self.show_error(format!("Failed to rebase: {}", e));
+                    self.show_error(format!("Failed to rebase: {e}"));
                 }
             },
-            PopupCallback::Bookmark => match crate::jj::operations::set_bookmark(&text) {
+            PopupCallback::Bookmark => match crate::jj::operations::set_bookmark(text) {
                 Ok(_) => {
-                    self.set_status_message(format!("Set bookmark: {}", text));
+                    self.set_status_message(format!("Set bookmark: {text}"));
                 }
                 Err(e) => {
-                    self.show_error(format!("Failed to set bookmark: {}", e));
+                    self.show_error(format!("Failed to set bookmark: {e}"));
                 }
             },
         }
@@ -391,12 +406,12 @@ impl App {
                         self.refresh_status()?;
                     }
                     Err(e) => {
-                        self.show_error(format!("Failed to create new commit: {}", e));
+                        self.show_error(format!("Failed to create new commit: {e}"));
                     }
                 }
             }
             Err(e) => {
-                self.show_error(format!("Failed to check working copy: {}", e));
+                self.show_error(format!("Failed to check working copy: {e}"));
             }
         }
         Ok(())
@@ -409,7 +424,7 @@ impl App {
                 self.refresh_status()?;
             }
             Err(e) => {
-                self.show_error(format!("Failed to fetch: {}", e));
+                self.show_error(format!("Failed to fetch: {e}"));
             }
         }
         Ok(())
@@ -419,15 +434,14 @@ impl App {
         let bookmark = crate::jj::operations::get_current_bookmark().ok().flatten();
         match crate::jj::operations::git_push(bookmark.as_deref()) {
             Ok(_) => {
-                let msg = if let Some(b) = bookmark {
-                    format!("Pushed bookmark: {}", b)
-                } else {
-                    "Pushed current change (created temporary bookmark)".to_string()
-                };
+                let msg = bookmark.map_or_else(
+                    || "Pushed current change (created temporary bookmark)".to_string(),
+                    |b| format!("Pushed bookmark: {b}"),
+                );
                 self.set_status_message(msg);
             }
             Err(e) => {
-                self.show_error(format!("Failed to push: {}", e));
+                self.show_error(format!("Failed to push: {e}"));
             }
         }
         Ok(())
@@ -450,7 +464,7 @@ impl App {
                     self.refresh_status()?;
                 }
                 Err(e) => {
-                    self.show_error(format!("Failed to checkout bookmark: {}", e));
+                    self.show_error(format!("Failed to checkout bookmark: {e}"));
                 }
             }
         }

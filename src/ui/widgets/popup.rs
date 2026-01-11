@@ -1,9 +1,27 @@
 use ratatui::{
     Frame,
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph, Wrap},
+    layout::{
+        Alignment,
+        Constraint,
+        Direction,
+        Layout,
+        Rect,
+    },
+    style::{
+        Modifier,
+        Style,
+    },
+    text::{
+        Line,
+        Span,
+    },
+    widgets::{
+        Block,
+        Borders,
+        Clear,
+        Paragraph,
+        Wrap,
+    },
 };
 
 use crate::app::App;

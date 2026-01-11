@@ -1,17 +1,22 @@
-use anyhow::{Context, Result};
 use std::process::Command;
 
-#[derive(Debug, Clone)]
+use anyhow::{
+    Context,
+    Result,
+};
+
+#[derive(Debug)]
 pub struct CommitInfo {
-    pub change_id: String,
-    pub commit_id: String,
+    pub change_id:   String,
+    /// Short commit id, currently unused it seems
+    _commit_id:      String,
     pub description: String,
-    pub author: String,
+    pub author:      String,
 }
 
 pub fn get_log(limit: usize) -> Result<Vec<CommitInfo>> {
     let output = Command::new("jj")
-        .args(&[
+        .args([
             "log",
             "--limit",
             &limit.to_string(),
@@ -44,7 +49,7 @@ pub fn get_log(limit: usize) -> Result<Vec<CommitInfo>> {
 
                 commits.push(CommitInfo {
                     change_id,
-                    commit_id,
+                    _commit_id: commit_id,
                     description,
                     author,
                 });

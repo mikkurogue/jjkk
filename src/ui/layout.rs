@@ -1,17 +1,47 @@
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style},
-    widgets::{Block, Borders, Tabs},
+    layout::{
+        Constraint,
+        Direction,
+        Layout,
+        Rect,
+    },
+    style::{
+        Modifier,
+        Style,
+    },
+    widgets::{
+        Block,
+        Borders,
+        Tabs,
+    },
 };
 
-use crate::app::{App, PopupState, Tab};
-use crate::ui::tabs::bookmarks::render_bookmarks;
-use crate::ui::tabs::log::render_log;
-use crate::ui::tabs::working_copy::render_working_copy;
-use crate::ui::widgets::popup::{render_error_popup, render_help_popup, render_input_popup};
-use crate::ui::widgets::status_bar::render_status_bar;
+use crate::{
+    app::{
+        App,
+        PopupState,
+        Tab,
+    },
+    ui::{
+        tabs::{
+            bookmarks::render_bookmarks,
+            log::render_log,
+            working_copy::render_working_copy,
+        },
+        widgets::{
+            popup::{
+                render_error_popup,
+                render_help_popup,
+                render_input_popup,
+            },
+            status_bar::render_status_bar,
+        },
+    },
+};
 
+/// Render the main ui of the application
+/// Initial state should show the working copy tab
 pub fn render_ui(f: &mut Frame, app: &App) {
     let size = f.area();
 
@@ -82,17 +112,4 @@ fn render_tab_content(f: &mut Frame, app: &App, area: Rect) {
             render_log(f, app, area);
         }
     }
-}
-
-fn render_placeholder(f: &mut Frame, app: &App, text: &str, area: Rect) {
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(app.theme.surface1))
-        .style(Style::default().bg(app.theme.base));
-
-    let text_widget = ratatui::widgets::Paragraph::new(text)
-        .block(block)
-        .style(Style::default().fg(app.theme.text));
-
-    f.render_widget(text_widget, area);
 }

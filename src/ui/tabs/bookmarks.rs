@@ -1,9 +1,21 @@
 use ratatui::{
     Frame,
     layout::Rect,
-    style::{Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    style::{
+        Modifier,
+        Style,
+    },
+    text::{
+        Line,
+        Span,
+    },
+    widgets::{
+        Block,
+        Borders,
+        List,
+        ListItem,
+        Paragraph,
+    },
 };
 
 use crate::app::App;
@@ -13,7 +25,7 @@ pub fn render_bookmarks(f: &mut Frame, app: &App, area: Rect) {
     let bookmarks = match crate::jj::operations::get_bookmarks() {
         Ok(b) => b,
         Err(e) => {
-            let error_text = format!("Failed to get bookmarks: {}", e);
+            let error_text = format!("Failed to get bookmarks: {e}");
             let paragraph = Paragraph::new(error_text)
                 .block(
                     Block::default()

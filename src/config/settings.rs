@@ -1,12 +1,16 @@
-use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+use serde::{
+    Deserialize,
+    Serialize,
+};
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Settings {
     #[serde(default)]
     pub theme: ThemeSettings,
     #[serde(default)]
-    pub ui: UiSettings,
+    pub ui:    UiSettings,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -22,32 +26,23 @@ pub struct UiSettings {
     #[serde(default = "default_visible_diff_lines")]
     pub visible_diff_lines: usize,
     #[serde(default = "default_log_commits_count")]
-    pub log_commits_count: usize,
+    pub log_commits_count:  usize,
 }
 
 fn default_theme_name() -> String {
     "catppuccin-mocha".to_string()
 }
 
-fn default_diff_context_lines() -> usize {
+const fn default_diff_context_lines() -> usize {
     3
 }
 
-fn default_visible_diff_lines() -> usize {
+const fn default_visible_diff_lines() -> usize {
     30
 }
 
-fn default_log_commits_count() -> usize {
+const fn default_log_commits_count() -> usize {
     10
-}
-
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            theme: ThemeSettings::default(),
-            ui: UiSettings::default(),
-        }
-    }
 }
 
 impl Default for ThemeSettings {
@@ -63,7 +58,7 @@ impl Default for UiSettings {
         Self {
             diff_context_lines: default_diff_context_lines(),
             visible_diff_lines: default_visible_diff_lines(),
-            log_commits_count: default_log_commits_count(),
+            log_commits_count:  default_log_commits_count(),
         }
     }
 }
@@ -77,7 +72,7 @@ impl Settings {
         }
 
         let content = std::fs::read_to_string(&config_path)?;
-        let settings: Settings = toml::from_str(&content)?;
+        let settings: Self = toml::from_str(&content)?;
         Ok(settings)
     }
 

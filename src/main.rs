@@ -1,23 +1,36 @@
-// Hello world
+//! jjkk - A terminal UI for the jj version control system
 
 mod app;
 mod config;
 mod jj;
 mod ui;
 
+use std::io;
+
 use anyhow::Result;
+use app::App;
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event},
+    event::{
+        self,
+        DisableMouseCapture,
+        EnableMouseCapture,
+        Event,
+    },
     execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{
+        EnterAlternateScreen,
+        LeaveAlternateScreen,
+        disable_raw_mode,
+        enable_raw_mode,
+    },
 };
 use ratatui::{
     Terminal,
-    backend::{Backend, CrosstermBackend},
+    backend::{
+        Backend,
+        CrosstermBackend,
+    },
 };
-use std::io;
-
-use app::App;
 use ui::layout::render_ui;
 
 #[tokio::main]
@@ -36,7 +49,7 @@ async fn main() -> Result<()> {
     app.refresh_status()?;
 
     // Run the application
-    let res = run_app(&mut terminal, &mut app).await;
+    let res = run_app(&mut terminal, &mut app);
 
     // Restore terminal
     disable_raw_mode()?;
@@ -48,20 +61,23 @@ async fn main() -> Result<()> {
     terminal.show_cursor()?;
 
     if let Err(err) = res {
-        eprintln!("Error: {:?}", err);
+        eprintln!("Error: {err:?}");
     }
 
     Ok(())
 }
 
-async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()> {
+fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()>
+where
+    <B as Backend>::Error: Send + Sync + 'static,
+{
     loop {
         terminal.draw(|f| render_ui(f, app))?;
 
-        if event::poll(std::time::Duration::from_millis(100))? {
-            if let Event::Key(key) = event::read()? {
-                app.handle_key_event(key)?;
-            }
+        if event::poll(std::time::Duration::from_millis(100))?
+            && let Event::Key(key) = event::read()?
+        {
+            app.handle_key_event(key)?;
         }
 
         if app.should_quit {

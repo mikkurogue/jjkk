@@ -1,12 +1,14 @@
-use anyhow::Result;
 use std::process::Command;
 
-use crate::jj::repo::{ChangeType, FileStatus};
+use anyhow::Result;
+
+use crate::jj::repo::{
+    ChangeType,
+    FileStatus,
+};
 
 pub fn get_working_copy_status() -> Result<Vec<FileStatus>> {
-    let output = Command::new("jj")
-        .args(&["status", "--no-pager"])
-        .output()?;
+    let output = Command::new("jj").args(["status", "--no-pager"]).output()?;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let mut files = Vec::new();

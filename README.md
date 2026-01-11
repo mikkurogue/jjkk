@@ -1,6 +1,6 @@
 # jjkk
 
-> A fast, beautiful terminal UI for [Jujutsu](https://martinvonz.github.io/jj/) version control
+> A fast, beautiful terminal UI for [Jujutsu](https://docs.jj-vcs.dev/latest/) version control
 
 **jjkk** brings the power of [lazygit](https://github.com/jesseduffield/lazygit)-style interfaces to Jujutsu VCS. Navigate your repository, stage changes, create commits, and manage bookmarks—all from a sleek, keyboard-driven TUI.
 
@@ -10,7 +10,7 @@
 
 **Intuitive Interface**
 - Split-pane view with file list and colorized diff viewer
-- Vim-style navigation (hjkl)
+- Vim-style navigation (hjkl), but thats really it
 - Tab-based workflow: Working Copy, Bookmarks, Log
 
 **Essential Operations**
@@ -83,14 +83,13 @@ log_commits_count = 20  # Number of commits to show in Log tab
 
 ## Roadmap
 
-- [ ] Full syntax highlighting using syntect
-- [ ] Help screen (`?` key)
+- [x] Full syntax highlighting using syntect
+- [x] Help screen (`?` key)
 - [ ] Commit details view
 - [ ] Bookmark management (delete, rename)
 - [ ] Direct jj-lib integration (currently uses subprocess)
 - [ ] Customizable themes
 - [ ] Split/squash commits
-- [ ] Conflict resolution UI
 
 ## Contributing
 

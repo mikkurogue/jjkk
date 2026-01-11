@@ -1,5 +1,6 @@
-use anyhow::Result;
 use std::path::PathBuf;
+
+use anyhow::Result;
 
 // Placeholder for now - will implement with jj-lib once we figure out the API
 pub struct JjRepo {
@@ -10,22 +11,21 @@ impl JjRepo {
     pub fn open(path: Option<PathBuf>) -> Result<Self> {
         let cwd = path.unwrap_or_else(|| std::env::current_dir().expect("Failed to get cwd"));
 
+        // TODO : make this a bit nicer
+        if !cwd.join(".jj").is_dir() {
+            anyhow::bail!("No jj repository found at {}", cwd.display());
+        }
+
         // TODO: Open workspace with jj-lib
         Ok(Self {
             _workspace_root: cwd,
         })
     }
-
-    pub fn get_status(&self) -> Result<Vec<FileStatus>> {
-        // TODO: Implement with jj-lib
-        // For now, use jj status command output
-        Ok(vec![])
-    }
 }
 
 #[derive(Debug, Clone)]
 pub struct FileStatus {
-    pub path: String,
+    pub path:   String,
     pub status: ChangeType,
 }
 
@@ -37,11 +37,11 @@ pub enum ChangeType {
 }
 
 impl ChangeType {
-    pub fn symbol(&self) -> &str {
+    pub const fn symbol(&self) -> &str {
         match self {
-            ChangeType::Added => "A",
-            ChangeType::Modified => "M",
-            ChangeType::Deleted => "D",
+            Self::Added => "A",
+            Self::Modified => "M",
+            Self::Deleted => "D",
         }
     }
 }
