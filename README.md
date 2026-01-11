@@ -8,35 +8,29 @@
 
 ## Features
 
-✨ **Intuitive Interface**
+**Intuitive Interface**
 - Split-pane view with file list and colorized diff viewer
 - Vim-style navigation (hjkl)
 - Tab-based workflow: Working Copy, Bookmarks, Log
 
-🚀 **Essential Operations**
+**Essential Operations**
 - View and navigate file changes with live diffs
 - Describe and commit changes with popup prompts
 - Create new commits, set bookmarks, and rebase
 - Fetch from and push to remote repositories
 - Checkout bookmarks interactively
 
-🎨 **Beautiful Design**
-- Catppuccin Mocha color theme
-- Syntax-highlighted diffs (additions, deletions, hunks)
-- Clean, minimal interface built with [ratatui](https://ratatui.rs/)
-
 ## Installation
 
 ### Prerequisites
-- [Jujutsu](https://github.com/martinvonz/jj) must be installed and in your PATH
-- Rust 1.70+ (for building from source)
+- [Jujutsu](https://github.com/jj-vcs/jj) must be installed and in your PATH
+- Rust nightly (for building from source)
 
 ### From Source
 ```bash
-git clone https://github.com/yourusername/jjkk.git
+git clone https://github.com/mikkurogue/jjkk.git
 cd jjkk
-cargo build --release
-./target/release/jjkk
+cargo install --path .
 ```
 
 ## Usage
@@ -98,10 +92,6 @@ log_commits_count = 20  # Number of commits to show in Log tab
 - [ ] Split/squash commits
 - [ ] Conflict resolution UI
 
-## Why "jjkk"?
-
-`jj` for Jujutsu + `kk` for the Vim motion keys you'll be using constantly. Also, it's fun to type!
-
 ## Contributing
 
 Contributions are welcome! Feel free to open issues or submit pull requests.
@@ -114,5 +104,3 @@ MIT License - See [LICENSE](LICENSE) for details
 
 - [Jujutsu](https://github.com/martinvonz/jj) - The amazing VCS that makes this possible
 - [lazygit](https://github.com/jesseduffield/lazygit) - Inspiration for the TUI design
-- [ratatui](https://ratatui.rs/) - The excellent Rust TUI framework
-- [Catppuccin](https://github.com/catppuccin/catppuccin) - Beautiful color palette
