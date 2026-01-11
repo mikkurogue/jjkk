@@ -76,6 +76,10 @@ pub fn git_push(bookmark: Option<&str>) -> Result<String> {
     if let Some(bookmark_name) = bookmark {
         args.push("-b");
         args.push(bookmark_name);
+    } else {
+        // If no bookmark, push the current change
+        args.push("--change");
+        args.push("@");
     }
 
     let output = Command::new("jj")

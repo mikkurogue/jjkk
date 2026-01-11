@@ -1,10 +1,11 @@
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
 };
+use syntect::{easy::HighlightLines, highlighting::ThemeSet, parsing::SyntaxSet};
 
 use crate::app::App;
 use crate::jj::repo::ChangeType;
@@ -67,26 +68,96 @@ fn render_file_list(f: &mut Frame, app: &App, area: Rect) {
 
 fn render_diff_view(f: &mut Frame, app: &App, area: Rect) {
     let lines: Vec<Line> = if let Some(ref diff) = app.current_diff {
-        // Parse diff and colorize lines
+        // Get file extension for syntax detection
+        let file_path = app
+            .files
+            .get(app.selected_file_index)
+            .map(|f| f.path.as_str());
+
+        // Initialize syntect
+        let ps = SyntaxSet::load_defaults_newlines();
+        let ts = ThemeSet::load_defaults();
+        let theme = &ts.themes["base16-ocean.dark"];
+
+        // Try to detect syntax from file path
+        let syntax = if let Some(path) = file_path {
+            ps.find_syntax_for_file(path).ok().flatten()
+        } else {
+            None
+        }
+        .or_else(|| Some(ps.find_syntax_plain_text()));
+
+        // Parse diff and apply syntax highlighting
         diff.lines()
             .map(|line| {
-                let style = if line.starts_with('+') && !line.starts_with("+++") {
-                    // Added line
-                    Style::default().fg(app.theme.green)
-                } else if line.starts_with('-') && !line.starts_with("---") {
-                    // Removed line
-                    Style::default().fg(app.theme.red)
+                // Check for diff-specific lines first
+                if line.starts_with("+++") || line.starts_with("---") {
+                    // File headers
+                    Line::from(Span::styled(line, Style::default().fg(app.theme.lavender)))
                 } else if line.starts_with("@@") {
                     // Hunk header
-                    Style::default().fg(app.theme.blue)
+                    Line::from(Span::styled(
+                        line,
+                        Style::default()
+                            .fg(app.theme.blue)
+                            .add_modifier(Modifier::BOLD),
+                    ))
                 } else if line.starts_with("diff ") || line.starts_with("index ") {
                     // Diff header
-                    Style::default().fg(app.theme.lavender)
+                    Line::from(Span::styled(line, Style::default().fg(app.theme.lavender)))
+                } else if line.starts_with('+') {
+                    // Added line - apply syntax highlighting to the content (skip the + prefix)
+                    let content = &line[1..];
+                    if let Some(ref syntax) = syntax {
+                        let mut h = HighlightLines::new(syntax, theme);
+                        let ranges = h.highlight_line(content, &ps).unwrap_or_default();
+                        let spans: Vec<Span> = std::iter::once(Span::styled(
+                            "+",
+                            Style::default().fg(app.theme.green),
+                        ))
+                        .chain(ranges.into_iter().map(|(style, text)| {
+                            let color = syntect_to_ratatui_color(style.foreground);
+                            Span::styled(text, Style::default().fg(color))
+                        }))
+                        .collect();
+                        Line::from(spans).style(Style::default().fg(app.theme.green))
+                    } else {
+                        Line::from(Span::styled(line, Style::default().fg(app.theme.green)))
+                    }
+                } else if line.starts_with('-') {
+                    // Removed line - apply syntax highlighting to the content (skip the - prefix)
+                    let content = &line[1..];
+                    if let Some(ref syntax) = syntax {
+                        let mut h = HighlightLines::new(syntax, theme);
+                        let ranges = h.highlight_line(content, &ps).unwrap_or_default();
+                        let spans: Vec<Span> =
+                            std::iter::once(Span::styled("-", Style::default().fg(app.theme.red)))
+                                .chain(ranges.into_iter().map(|(style, text)| {
+                                    let color = syntect_to_ratatui_color(style.foreground);
+                                    Span::styled(text, Style::default().fg(color))
+                                }))
+                                .collect();
+                        Line::from(spans).style(Style::default().fg(app.theme.red))
+                    } else {
+                        Line::from(Span::styled(line, Style::default().fg(app.theme.red)))
+                    }
                 } else {
-                    // Context line
-                    Style::default().fg(app.theme.text)
-                };
-                Line::from(Span::styled(line, style))
+                    // Context line - apply syntax highlighting
+                    if let Some(ref syntax) = syntax {
+                        let mut h = HighlightLines::new(syntax, theme);
+                        let ranges = h.highlight_line(line, &ps).unwrap_or_default();
+                        let spans: Vec<Span> = ranges
+                            .into_iter()
+                            .map(|(style, text)| {
+                                let color = syntect_to_ratatui_color(style.foreground);
+                                Span::styled(text, Style::default().fg(color))
+                            })
+                            .collect();
+                        Line::from(spans)
+                    } else {
+                        Line::from(Span::styled(line, Style::default().fg(app.theme.text)))
+                    }
+                }
             })
             .collect()
     } else if app.files.is_empty() {
@@ -129,4 +200,9 @@ fn render_diff_view(f: &mut Frame, app: &App, area: Rect) {
         .wrap(Wrap { trim: false });
 
     f.render_widget(paragraph, area);
+}
+
+// Helper function to convert syntect color to ratatui color
+fn syntect_to_ratatui_color(color: syntect::highlighting::Color) -> Color {
+    Color::Rgb(color.r, color.g, color.b)
 }

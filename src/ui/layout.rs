@@ -9,7 +9,7 @@ use crate::app::{App, PopupState, Tab};
 use crate::ui::tabs::bookmarks::render_bookmarks;
 use crate::ui::tabs::log::render_log;
 use crate::ui::tabs::working_copy::render_working_copy;
-use crate::ui::widgets::popup::{render_error_popup, render_input_popup};
+use crate::ui::widgets::popup::{render_error_popup, render_help_popup, render_input_popup};
 use crate::ui::widgets::status_bar::render_status_bar;
 
 pub fn render_ui(f: &mut Frame, app: &App) {
@@ -41,6 +41,9 @@ pub fn render_ui(f: &mut Frame, app: &App) {
         }
         PopupState::Error { message } => {
             render_error_popup(f, app, message, size);
+        }
+        PopupState::Help => {
+            render_help_popup(f, app, size);
         }
         PopupState::None => {}
     }

@@ -1,3 +1,5 @@
+// Hello world
+
 mod app;
 mod config;
 mod jj;

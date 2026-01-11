@@ -57,6 +57,7 @@ pub enum PopupState {
     Error {
         message: String,
     },
+    Help,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -167,8 +168,22 @@ impl App {
             return Ok(());
         }
 
+        // Handle help popup
+        if let PopupState::Help = self.popup_state {
+            match key.code {
+                KeyCode::Char('?') | KeyCode::Esc | KeyCode::Char('q') => {
+                    self.popup_state = PopupState::None;
+                }
+                _ => {}
+            }
+            return Ok(());
+        }
+
         // Handle normal key events
         match key.code {
+            KeyCode::Char('?') => {
+                self.popup_state = PopupState::Help;
+            }
             KeyCode::Char('q') => {
                 self.should_quit = true;
             }
@@ -407,7 +422,7 @@ impl App {
                 let msg = if let Some(b) = bookmark {
                     format!("Pushed bookmark: {}", b)
                 } else {
-                    "Pushed to remote".to_string()
+                    "Pushed current change (created temporary bookmark)".to_string()
                 };
                 self.set_status_message(msg);
             }
