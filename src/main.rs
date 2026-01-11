@@ -72,6 +72,7 @@ where
     <B as Backend>::Error: Send + Sync + 'static,
 {
     loop {
+        app.update_status_message_timeout();
         terminal.draw(|f| render_ui(f, app))?;
 
         if event::poll(std::time::Duration::from_millis(100))?

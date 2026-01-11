@@ -66,8 +66,13 @@ pub fn render_ui(f: &mut Frame, app: &App) {
 
     // Render popups on top
     match &app.popup_state {
-        PopupState::Input { title, content, .. } => {
-            render_input_popup(f, app, title, content, size);
+        PopupState::Input {
+            title,
+            content,
+            cursor_position,
+            ..
+        } => {
+            render_input_popup(f, app, title, content, *cursor_position, size);
         }
         PopupState::Error { message } => {
             render_error_popup(f, app, message, size);

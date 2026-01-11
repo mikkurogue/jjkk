@@ -26,7 +26,14 @@ use ratatui::{
 
 use crate::app::App;
 
-pub fn render_input_popup(f: &mut Frame, app: &App, title: &str, content: &str, area: Rect) {
+pub fn render_input_popup(
+    f: &mut Frame,
+    app: &App,
+    title: &str,
+    content: &str,
+    cursor_position: usize,
+    area: Rect,
+) {
     let popup_area = centered_rect(60, 40, area);
 
     let block = Block::default()
@@ -35,11 +42,25 @@ pub fn render_input_popup(f: &mut Frame, app: &App, title: &str, content: &str, 
         .border_style(Style::default().fg(app.theme.lavender))
         .style(Style::default().bg(app.theme.surface0));
 
+    // Insert cursor character at cursor position
+    let content_with_cursor = if content.is_empty() {
+        "█".to_string()
+    } else {
+        let mut chars: Vec<char> = content.chars().collect();
+        // Insert block cursor at position
+        if cursor_position >= chars.len() {
+            chars.push('█');
+        } else {
+            chars.insert(cursor_position, '█');
+        }
+        chars.into_iter().collect()
+    };
+
     let text = vec![
-        Line::from(content),
+        Line::from(content_with_cursor),
         Line::from(""),
         Line::from(Span::styled(
-            "Enter to confirm | Esc to cancel",
+            "Enter to confirm | Shift+Enter for newline | Esc to cancel",
             Style::default().fg(app.theme.subtext0),
         )),
     ];

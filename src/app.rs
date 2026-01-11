@@ -1,7 +1,10 @@
+use std::time::Instant;
+
 use anyhow::Result;
 use crossterm::event::{
     KeyCode,
     KeyEvent,
+    KeyModifiers,
 };
 
 use crate::{
@@ -48,9 +51,10 @@ impl Tab {
 pub enum PopupState {
     None,
     Input {
-        title:    String,
-        content:  String,
-        callback: PopupCallback,
+        title:           String,
+        content:         String,
+        cursor_position: usize,
+        callback:        PopupCallback,
     },
     Error {
         message: String,
@@ -73,6 +77,7 @@ pub struct App {
     pub should_quit: bool,
     pub popup_state: PopupState,
     pub status_message: Option<String>,
+    pub status_message_timestamp: Option<Instant>,
     pub selected_file_index: usize,
     pub selected_bookmark_index: usize,
     pub selected_log_index: usize,
@@ -98,6 +103,7 @@ impl App {
             should_quit: false,
             popup_state: PopupState::None,
             status_message: None,
+            status_message_timestamp: None,
             selected_file_index: 0,
             selected_bookmark_index: 0,
             selected_log_index: 0,
@@ -132,6 +138,7 @@ impl App {
         // Handle popup input first
         if let PopupState::Input {
             ref mut content,
+            ref mut cursor_position,
             callback,
             ..
         } = self.popup_state
@@ -141,16 +148,39 @@ impl App {
                     self.popup_state = PopupState::None;
                 }
                 KeyCode::Enter => {
-                    let text = content.clone();
-                    let cb = callback;
-                    self.popup_state = PopupState::None;
-                    self.execute_popup_callback(cb, &text)?;
+                    // Shift+Enter inserts a newline
+                    if key.modifiers.contains(KeyModifiers::SHIFT) {
+                        content.insert(*cursor_position, '\n');
+                        *cursor_position += 1;
+                    } else {
+                        // Regular Enter submits the form
+                        let text = content.clone();
+                        let cb = callback;
+                        self.popup_state = PopupState::None;
+                        self.execute_popup_callback(cb, &text)?;
+                    }
                 }
                 KeyCode::Char(c) => {
-                    content.push(c);
+                    content.insert(*cursor_position, c);
+                    *cursor_position += 1;
                 }
                 KeyCode::Backspace => {
-                    content.pop();
+                    if *cursor_position > 0 {
+                        *cursor_position -= 1;
+                        content.remove(*cursor_position);
+                    }
+                }
+                KeyCode::Left => {
+                    *cursor_position = cursor_position.saturating_sub(1);
+                }
+                KeyCode::Right => {
+                    *cursor_position = (*cursor_position + 1).min(content.len());
+                }
+                KeyCode::Home => {
+                    *cursor_position = 0;
+                }
+                KeyCode::End => {
+                    *cursor_position = content.len();
                 }
                 _ => {}
             }
@@ -320,33 +350,37 @@ impl App {
 
     fn show_describe_popup(&mut self) {
         self.popup_state = PopupState::Input {
-            title:    "Describe".to_string(),
-            content:  String::new(),
-            callback: PopupCallback::Describe,
+            title:           "Describe".to_string(),
+            content:         String::new(),
+            cursor_position: 0,
+            callback:        PopupCallback::Describe,
         };
     }
 
     fn show_commit_popup(&mut self) {
         self.popup_state = PopupState::Input {
-            title:    "Commit".to_string(),
-            content:  String::new(),
-            callback: PopupCallback::Commit,
+            title:           "Commit".to_string(),
+            content:         String::new(),
+            cursor_position: 0,
+            callback:        PopupCallback::Commit,
         };
     }
 
     fn show_rebase_popup(&mut self) {
         self.popup_state = PopupState::Input {
-            title:    "Rebase destination".to_string(),
-            content:  String::new(),
-            callback: PopupCallback::Rebase,
+            title:           "Rebase destination".to_string(),
+            content:         String::new(),
+            cursor_position: 0,
+            callback:        PopupCallback::Rebase,
         };
     }
 
     fn show_bookmark_popup(&mut self) {
         self.popup_state = PopupState::Input {
-            title:    "Set bookmark".to_string(),
-            content:  String::new(),
-            callback: PopupCallback::Bookmark,
+            title:           "Set bookmark".to_string(),
+            content:         String::new(),
+            cursor_position: 0,
+            callback:        PopupCallback::Bookmark,
         };
     }
 
@@ -449,6 +483,20 @@ impl App {
 
     pub fn set_status_message(&mut self, message: String) {
         self.status_message = Some(message);
+        self.status_message_timestamp = Some(Instant::now());
+    }
+
+    pub fn clear_status_message(&mut self) {
+        self.status_message = None;
+        self.status_message_timestamp = None;
+    }
+
+    pub fn update_status_message_timeout(&mut self) {
+        if let Some(timestamp) = self.status_message_timestamp {
+            if timestamp.elapsed().as_secs() >= 5 {
+                self.clear_status_message();
+            }
+        }
     }
 
     pub fn show_error(&mut self, message: String) {
