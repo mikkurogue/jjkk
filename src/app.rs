@@ -12,9 +12,12 @@ use crate::{
         Settings,
         Theme,
     },
-    jj::repo::{
-        FileStatus,
-        JjRepo,
+    jj::{
+        native_operations::Native,
+        repo::{
+            FileStatus,
+            JjRepo,
+        },
     },
 };
 
@@ -98,6 +101,8 @@ pub struct App {
     _repo: JjRepo,
     pub files: Vec<FileStatus>,
     pub current_diff: Option<String>,
+
+    pub native_ops: Native,
 }
 
 impl App {
@@ -124,6 +129,7 @@ impl App {
             _repo: repo,
             files: Vec::new(),
             current_diff: None,
+            native_ops: Native::new(),
         })
     }
 
@@ -532,7 +538,7 @@ impl App {
 
     fn execute_popup_callback(&mut self, callback: PopupCallback, text: &str) -> Result<()> {
         match callback {
-            PopupCallback::Describe => match crate::jj::operations::describe(text) {
+            PopupCallback::Describe => match self.native_ops.describe(text) {
                 Ok(_) => {
                     self.set_status_message("Description updated".to_string());
                     self.refresh_status()?;
