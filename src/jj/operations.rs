@@ -27,7 +27,7 @@ pub fn track_current_bookmark() -> Result<String> {
     }
 }
 
-/// basically a copy of track_current_bookmark but takes a name argument
+/// basically a copy of `track_current_bookmark` but takes a name argument
 /// to track a specific bookmark handy for when we create a new bookmark
 /// and want to track it right away
 pub fn auto_track_bookmark(name: &str) -> Result<String> {

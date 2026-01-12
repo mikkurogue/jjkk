@@ -93,10 +93,10 @@ pub fn render_ui(f: &mut Frame, app: &App) {
             );
         }
         PopupState::Error { message } => {
-            render_feedback_popup(f, app, message, size, FeedbackType::Error);
+            render_feedback_popup(f, app, message, size, &FeedbackType::Error);
         }
         PopupState::Warning { message } => {
-            render_feedback_popup(f, app, message, size, FeedbackType::Warning);
+            render_feedback_popup(f, app, message, size, &FeedbackType::Warning);
         }
         PopupState::Help => {
             render_help_popup(f, app, size);

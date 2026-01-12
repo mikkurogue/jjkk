@@ -26,10 +26,7 @@ use ratatui::{
     },
 };
 
-use crate::app::{
-    App,
-    PopupState,
-};
+use crate::app::App;
 
 pub enum FeedbackType {
     Warning,
@@ -89,25 +86,22 @@ pub fn render_feedback_popup(
     app: &App,
     message: &str,
     area: Rect,
-    popup_type: FeedbackType,
+    popup_type: &FeedbackType,
 ) {
     let popup_area = centered_rect(60, 30, area);
     let title = match popup_type {
         FeedbackType::Warning => "Warning",
         FeedbackType::Error => "Error",
-        _ => "",
     };
 
     let fg = match popup_type {
         FeedbackType::Warning => app.theme.yellow,
         FeedbackType::Error => app.theme.red,
-        _ => app.theme.text,
     };
 
     let border_fg = match popup_type {
         FeedbackType::Warning => app.theme.yellow,
         FeedbackType::Error => app.theme.red,
-        _ => app.theme.text,
     };
 
     let block = Block::default()
@@ -303,7 +297,7 @@ pub fn render_bookmark_select_popup(
             } else {
                 Style::default().fg(app.theme.text)
             };
-            ListItem::new(format!("  {}", bookmark)).style(style)
+            ListItem::new(format!("  {bookmark}")).style(style)
         })
         .collect();
 

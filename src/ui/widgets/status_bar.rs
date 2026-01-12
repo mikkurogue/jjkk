@@ -8,16 +8,21 @@ use ratatui::{
 use crate::app::App;
 
 pub fn render_status_bar(f: &mut Frame, app: &App, area: Rect) {
-    let status_text = if let Some(loading_msg) = &app.loading_message {
+    let status_text = app.loading_message.as_ref().map_or_else(|| {
+        app.status_message.as_ref().map_or_else(
+            || {
+                // Show default keybinds
+                "q: quit | hjkl: navigate | f: fetch | p: push | r: rebase  | d: describe | b: bookmark | X: restore | R: refresh".to_string()
+            },
+            |msg| {
+                // Show success message
+                format!("✓ {msg}")
+            }
+        )
+    }, |loading_msg| {
         // Show loading spinner with message
         format!("{} {}", app.get_spinner_char(), loading_msg)
-    } else if let Some(msg) = &app.status_message {
-        // Show success message
-        format!("✓ {msg}")
-    } else {
-        // Show default keybinds
-        "q: quit | hjkl: navigate | f: fetch | p: push | r: rebase  | d: describe | b: bookmark | X: restore | R: refresh".to_string()
-    };
+    });
 
     let style = if app.loading_message.is_some() {
         Style::default().fg(app.theme.yellow).bg(app.theme.base)

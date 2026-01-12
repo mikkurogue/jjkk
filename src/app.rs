@@ -159,8 +159,7 @@ impl App {
             let char_to_byte = |s: &str, char_pos: usize| -> usize {
                 s.char_indices()
                     .nth(char_pos)
-                    .map(|(byte_pos, _)| byte_pos)
-                    .unwrap_or(s.len())
+                    .map_or(s.len(), |(byte_pos, _)| byte_pos)
             };
 
             match key.code {
@@ -223,8 +222,7 @@ impl App {
             let char_to_byte = |s: &str, char_pos: usize| -> usize {
                 s.char_indices()
                     .nth(char_pos)
-                    .map(|(byte_pos, _)| byte_pos)
-                    .unwrap_or(s.len())
+                    .map_or(s.len(), |(byte_pos, _)| byte_pos)
             };
 
             // Filter bookmarks based on current content
@@ -461,10 +459,6 @@ impl App {
                 self.restore_working_copy()?;
                 self.set_status_message("Restored working copy".to_owned());
             }
-            KeyCode::Char('W') => {
-                // test warning popup
-                self.show_warning("This is a test warning".to_owned());
-            }
             _ => {}
         }
 
@@ -523,10 +517,10 @@ impl App {
 
     fn show_bookmark_popup(&mut self) {
         // Fetch available bookmarks
-        let bookmarks = match crate::jj::operations::get_bookmarks() {
-            Ok(bookmarks) => bookmarks.into_iter().map(|b| b.name).collect(),
-            Err(_) => Vec::new(),
-        };
+        let bookmarks = crate::jj::operations::get_bookmarks().map_or_else(
+            |_| Vec::new(),
+            |bookmarks| bookmarks.into_iter().map(|b| b.name).collect(),
+        );
 
         self.popup_state = PopupState::BookmarkSelect {
             content: String::new(),
@@ -643,10 +637,10 @@ impl App {
     }
 
     pub fn update_status_message_timeout(&mut self) {
-        if let Some(timestamp) = self.status_message_timestamp {
-            if timestamp.elapsed().as_secs() >= 2 {
-                self.clear_status_message();
-            }
+        if let Some(timestamp) = self.status_message_timestamp
+            && timestamp.elapsed().as_secs() >= 2
+        {
+            self.clear_status_message();
         }
     }
 
@@ -669,14 +663,12 @@ impl App {
     }
 
     pub fn get_spinner_char(&self) -> char {
-        if let Some(start) = self.loading_start {
+        self.loading_start.map_or(' ', |start| {
             let frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
             let elapsed = start.elapsed().as_millis();
             let frame_index = (elapsed / 80) as usize % frames.len();
             frames[frame_index]
-        } else {
-            ' '
-        }
+        })
     }
 
     fn handle_bookmark_checkout(&mut self) -> Result<()> {
