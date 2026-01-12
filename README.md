@@ -99,7 +99,7 @@ Contributions are welcome! Feel free to open issues or submit pull requests.
 
 ## License
 
-MIT License - See [LICENSE](LICENSE) for details
+A License - See [LICENSE](LICENSE) for details
 
 ## Acknowledgments
 
