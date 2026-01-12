@@ -445,6 +445,9 @@ impl App {
             KeyCode::Char('b') => {
                 self.show_bookmark_popup();
             }
+            KeyCode::Char('t') => {
+                self.track_current_bookmark();
+            }
             KeyCode::Char('R') => {
                 // Capital R to refresh status
                 self.refresh_status()?;
@@ -459,6 +462,17 @@ impl App {
         }
 
         Ok(())
+    }
+
+    fn track_current_bookmark(&mut self) {
+        match crate::jj::operations::track_current_bookmark() {
+            Ok(v) => {
+                self.set_status_message(v);
+            }
+            Err(e) => {
+                self.show_error(format!("Failed to track bookmark: {e}"));
+            }
+        }
     }
 
     fn restore_working_copy(&mut self) -> Result<()> {
