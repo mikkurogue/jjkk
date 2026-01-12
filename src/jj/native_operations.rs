@@ -5,7 +5,10 @@ use anyhow::{
     Result,
 };
 use jj_lib::{
-    config::StackedConfig,
+    config::{
+        ConfigSource,
+        StackedConfig,
+    },
     object_id::ObjectId,
     repo::{
         ReadonlyRepo,
@@ -53,8 +56,23 @@ impl Native {
     }
 
     fn detect_config() -> Result<StackedConfig> {
-        // Create user settings from default config
-        let config = StackedConfig::with_defaults();
+        // Create stacked config with defaults
+        let mut config = StackedConfig::with_defaults();
+
+        // Load user config from standard location (~/.config/jj/config.toml)
+        if let Some(config_dir) = dirs::config_dir() {
+            let user_config_path = config_dir.join("jj").join("config.toml");
+            if user_config_path.exists() {
+                config.load_file(ConfigSource::User, user_config_path)?;
+            }
+        }
+
+        // Load repo config from .jj/repo/config.toml if it exists
+        let repo_config_path = std::path::Path::new(".jj/repo/config.toml");
+        if repo_config_path.exists() {
+            config.load_file(ConfigSource::Repo, repo_config_path)?;
+        }
+
         Ok(config)
     }
 

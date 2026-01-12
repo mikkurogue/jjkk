@@ -241,13 +241,17 @@ pub fn get_bookmarks() -> Result<Vec<BookmarkInfo>> {
     let mut bookmarks = Vec::new();
     for line in stdout.lines() {
         // Parse bookmark lines like "main: abc123 description"
-        if let Some(name) = line.split(':').next() {
-            let name = name.trim().to_string();
-            if !name.is_empty() {
-                let is_current = current_bookmark.as_ref().is_some_and(|b| b == &name);
-                bookmarks.push(BookmarkInfo { name, is_current });
-            }
+
+        let n = line;
+        if n.trim().is_empty() {
+            continue;
         }
+
+        let is_current = current_bookmark.as_ref().is_some_and(|b| b == n);
+        bookmarks.push(BookmarkInfo {
+            name: n.to_string(),
+            is_current,
+        });
     }
 
     Ok(bookmarks)
