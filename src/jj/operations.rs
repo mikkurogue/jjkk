@@ -306,6 +306,7 @@ pub fn checkout_bookmark(bookmark: &str) -> Result<String> {
 
 /// Start work on a new commit based on a bookmark
 /// Executes `jj new <bookmark>` command
+#[allow(dead_code)] // allow for now as im not sure if im gonna use it short term
 pub fn new_on_bookmark(bookmark: &str) -> Result<String> {
     let output = Command::new("jj")
         .args(["new", bookmark])

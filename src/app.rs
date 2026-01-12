@@ -65,6 +65,9 @@ pub enum PopupState {
     Error {
         message: String,
     },
+    Warning {
+        message: String,
+    },
     Help,
 }
 
@@ -456,7 +459,11 @@ impl App {
             KeyCode::Char('X') => {
                 // Capital X to restore the working copy (aka discard changes)
                 self.restore_working_copy()?;
-                self.set_status_message("Restored working copy".to_string());
+                self.set_status_message("Restored working copy".to_owned());
+            }
+            KeyCode::Char('W') => {
+                // test warning popup
+                self.show_warning("This is a test warning".to_owned());
             }
             _ => {}
         }
@@ -566,7 +573,7 @@ impl App {
         // Check if working copy is already empty
         match crate::jj::operations::is_working_copy_empty() {
             Ok(true) => {
-                self.show_error("Already on an empty commit. Add changes first.".to_string());
+                self.show_warning("Already on an empty commit. Add changes first.".to_string());
                 return Ok(());
             }
             Ok(false) => {
@@ -645,6 +652,10 @@ impl App {
 
     pub fn show_error(&mut self, message: String) {
         self.popup_state = PopupState::Error { message };
+    }
+
+    pub fn show_warning(&mut self, message: String) {
+        self.popup_state = PopupState::Warning { message };
     }
 
     pub fn show_loading(&mut self, message: String) {

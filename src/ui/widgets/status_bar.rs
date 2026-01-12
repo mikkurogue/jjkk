@@ -16,7 +16,7 @@ pub fn render_status_bar(f: &mut Frame, app: &App, area: Rect) {
         format!("✓ {msg}")
     } else {
         // Show default keybinds
-        "q: quit | hjkl: navigate | d: describe | c: commit | n: new | b: bookmark | X: restore | f: fetch | p: push | r: rebase | R: refresh".to_string()
+        "q: quit | hjkl: navigate | f: fetch | p: push | r: rebase  | d: describe | b: bookmark | X: restore | R: refresh".to_string()
     };
 
     let style = if app.loading_message.is_some() {

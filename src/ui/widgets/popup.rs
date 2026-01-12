@@ -26,7 +26,15 @@ use ratatui::{
     },
 };
 
-use crate::app::App;
+use crate::app::{
+    App,
+    PopupState,
+};
+
+pub enum FeedbackType {
+    Warning,
+    Error,
+}
 
 pub fn render_input_popup(
     f: &mut Frame,
@@ -76,17 +84,40 @@ pub fn render_input_popup(
     f.render_widget(paragraph, popup_area);
 }
 
-pub fn render_error_popup(f: &mut Frame, app: &App, message: &str, area: Rect) {
+pub fn render_feedback_popup(
+    f: &mut Frame,
+    app: &App,
+    message: &str,
+    area: Rect,
+    popup_type: FeedbackType,
+) {
     let popup_area = centered_rect(60, 30, area);
+    let title = match popup_type {
+        FeedbackType::Warning => "Warning",
+        FeedbackType::Error => "Error",
+        _ => "",
+    };
+
+    let fg = match popup_type {
+        FeedbackType::Warning => app.theme.yellow,
+        FeedbackType::Error => app.theme.red,
+        _ => app.theme.text,
+    };
+
+    let border_fg = match popup_type {
+        FeedbackType::Warning => app.theme.yellow,
+        FeedbackType::Error => app.theme.red,
+        _ => app.theme.text,
+    };
 
     let block = Block::default()
-        .title("Error")
+        .title(title)
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(app.theme.red))
+        .border_style(Style::default().fg(border_fg))
         .style(Style::default().bg(app.theme.surface0));
 
     let text = vec![
-        Line::from(Span::styled(message, Style::default().fg(app.theme.red))),
+        Line::from(Span::styled(message, Style::default().fg(fg))),
         Line::from(""),
         Line::from(Span::styled(
             "Press Enter or Esc to close",
@@ -168,6 +199,7 @@ pub fn render_help_popup(f: &mut Frame, app: &App, area: Rect) {
         )),
         Line::from("  f           Fetch from remote"),
         Line::from("  p           Push to remote"),
+        Line::from("  t           Track the current bookmark (if untracked)"),
         Line::from(""),
         Line::from(Span::styled(
             "Branch/Bookmark Operations",

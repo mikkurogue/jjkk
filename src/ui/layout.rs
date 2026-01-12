@@ -31,8 +31,9 @@ use crate::{
         },
         widgets::{
             popup::{
+                FeedbackType,
                 render_bookmark_select_popup,
-                render_error_popup,
+                render_feedback_popup,
                 render_help_popup,
                 render_input_popup,
             },
@@ -92,7 +93,10 @@ pub fn render_ui(f: &mut Frame, app: &App) {
             );
         }
         PopupState::Error { message } => {
-            render_error_popup(f, app, message, size);
+            render_feedback_popup(f, app, message, size, FeedbackType::Error);
+        }
+        PopupState::Warning { message } => {
+            render_feedback_popup(f, app, message, size, FeedbackType::Warning);
         }
         PopupState::Help => {
             render_help_popup(f, app, size);
