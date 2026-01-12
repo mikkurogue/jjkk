@@ -1,4 +1,3 @@
-use crossterm::cursor::SetCursorStyle;
 use ratatui::{
     Frame,
     layout::{
