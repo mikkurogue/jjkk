@@ -18,12 +18,15 @@ use ratatui::{
     },
 };
 
-use crate::app::App;
+use crate::{
+    app::App,
+    jj::log,
+};
 
 pub fn render_log(f: &mut Frame, app: &App, area: Rect) {
     // Get log with configured limit
     let limit = app.settings.ui.log_commits_count;
-    let commits = match crate::jj::log::get_log(limit) {
+    let commits = match log::get_log(limit) {
         Ok(c) => c,
         Err(e) => {
             let error_text = format!("Failed to get log: {e}");

@@ -240,18 +240,42 @@ pub fn get_bookmarks() -> Result<Vec<BookmarkInfo>> {
 
     let mut bookmarks = Vec::new();
     for line in stdout.lines() {
-        // Parse bookmark lines like "main: abc123 description"
+        // Parse bookmark lines like "master: xvxormtl a3558703 description"
+        // or "master (conflicted):"
+        // We only want the bookmark name (the part before the colon)
 
-        let n = line;
-        if n.trim().is_empty() {
+        let line = line.trim();
+        if line.is_empty() {
             continue;
         }
 
-        let is_current = current_bookmark.as_ref().is_some_and(|b| b == n);
-        bookmarks.push(BookmarkInfo {
-            name: n.to_string(),
-            is_current,
-        });
+        // Extract bookmark name (everything before the first colon)
+        if let Some(colon_pos) = line.find(':') {
+            let bookmark_name = line[..colon_pos].trim();
+
+            // Remove any status indicators like (conflicted), (deleted), etc.
+            let bookmark_name = if let Some(paren_pos) = bookmark_name.find(" (") {
+                bookmark_name[..paren_pos].trim()
+            } else {
+                bookmark_name
+            };
+
+            if bookmark_name.is_empty() {
+                continue;
+            }
+
+            // Check if this bookmark is current by comparing with the current bookmark
+            // The current bookmark might have a * suffix (e.g., "master*"), so we need to strip it
+            let is_current = current_bookmark.as_ref().is_some_and(|current| {
+                let current_clean = current.trim_end_matches('*');
+                current_clean == bookmark_name
+            });
+
+            bookmarks.push(BookmarkInfo {
+                name: bookmark_name.to_string(),
+                is_current,
+            });
+        }
     }
 
     Ok(bookmarks)

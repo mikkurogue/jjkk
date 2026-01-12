@@ -18,11 +18,14 @@ use ratatui::{
     },
 };
 
-use crate::app::App;
+use crate::{
+    app::App,
+    jj::operations as jj_ops,
+};
 
 pub fn render_bookmarks(f: &mut Frame, app: &App, area: Rect) {
     // Get bookmarks
-    let bookmarks = match crate::jj::operations::get_bookmarks() {
+    let bookmarks = match jj_ops::get_bookmarks() {
         Ok(b) => b,
         Err(e) => {
             let error_text = format!("Failed to get bookmarks: {e}");

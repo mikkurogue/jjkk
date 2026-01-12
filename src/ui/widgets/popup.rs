@@ -26,7 +26,10 @@ use ratatui::{
     },
 };
 
-use crate::app::App;
+use crate::{
+    app::App,
+    jj::operations::BookmarkInfo,
+};
 
 pub enum FeedbackType {
     Warning,
@@ -233,7 +236,7 @@ pub fn render_bookmark_select_popup(
     app: &App,
     content: &str,
     cursor_position: usize,
-    available_bookmarks: &[String],
+    available_bookmarks: &[BookmarkInfo],
     selected_index: usize,
     area: Rect,
 ) {
@@ -275,12 +278,12 @@ pub fn render_bookmark_select_popup(
         .wrap(Wrap { trim: false });
 
     // Filter bookmarks
-    let filtered: Vec<&String> = if content.is_empty() {
+    let filtered: Vec<&BookmarkInfo> = if content.is_empty() {
         available_bookmarks.iter().collect()
     } else {
         available_bookmarks
             .iter()
-            .filter(|b| b.to_lowercase().contains(&content.to_lowercase()))
+            .filter(|b| b.name.to_lowercase().contains(&content.to_lowercase()))
             .collect()
     };
 
@@ -294,10 +297,17 @@ pub fn render_bookmark_select_popup(
                     .fg(app.theme.base)
                     .bg(app.theme.lavender)
                     .add_modifier(Modifier::BOLD)
+            } else if bookmark.is_current {
+                // Highlight current bookmark with a different color
+                Style::default()
+                    .fg(app.theme.green)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(app.theme.text)
             };
-            ListItem::new(format!("  {bookmark}")).style(style)
+
+            let prefix = if bookmark.is_current { "* " } else { "  " };
+            ListItem::new(format!("{}{}", prefix, bookmark.name)).style(style)
         })
         .collect();
 

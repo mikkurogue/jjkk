@@ -2,7 +2,7 @@ use std::process::Command;
 
 use anyhow::Result;
 
-use crate::jj::repo::{
+use super::repo::{
     ChangeType,
     FileStatus,
 };

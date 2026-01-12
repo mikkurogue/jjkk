@@ -13,11 +13,17 @@ use crate::{
         Theme,
     },
     jj::{
+        log,
         native_operations::Native,
+        operations::{
+            self as jj_ops,
+            BookmarkInfo,
+        },
         repo::{
             FileStatus,
             JjRepo,
         },
+        status,
     },
 };
 
@@ -62,7 +68,7 @@ pub enum PopupState {
     BookmarkSelect {
         content: String,
         cursor_position: usize,
-        available_bookmarks: Vec<String>,
+        available_bookmarks: Vec<BookmarkInfo>,
         selected_index: usize,
     },
     Error {
@@ -134,7 +140,7 @@ impl App {
     }
 
     pub fn refresh_status(&mut self) -> Result<()> {
-        self.files = crate::jj::status::get_working_copy_status()?;
+        self.files = status::get_working_copy_status()?;
         self.selected_file_index = self
             .selected_file_index
             .min(self.files.len().saturating_sub(1));
@@ -145,7 +151,7 @@ impl App {
 
     pub fn update_diff(&mut self) -> Result<()> {
         if let Some(file) = self.files.get(self.selected_file_index) {
-            self.current_diff = Some(crate::jj::operations::get_file_diff(&file.path)?);
+            self.current_diff = Some(jj_ops::get_file_diff(&file.path)?);
         } else {
             self.current_diff = None;
         }
@@ -232,12 +238,12 @@ impl App {
             };
 
             // Filter bookmarks based on current content
-            let filtered: Vec<&String> = if content.is_empty() {
+            let filtered: Vec<&BookmarkInfo> = if content.is_empty() {
                 available_bookmarks.iter().collect()
             } else {
                 available_bookmarks
                     .iter()
-                    .filter(|b| b.to_lowercase().contains(&content.to_lowercase()))
+                    .filter(|b| b.name.to_lowercase().contains(&content.to_lowercase()))
                     .collect()
             };
 
@@ -249,7 +255,7 @@ impl App {
                     // If there's filtered content and user selected from list, use that
                     let bookmark_name = if !filtered.is_empty() && *selected_index < filtered.len()
                     {
-                        filtered[*selected_index].clone()
+                        filtered[*selected_index].name.clone()
                     } else if !content.is_empty() {
                         // Otherwise use the typed content as new bookmark name
                         content.clone()
@@ -260,7 +266,7 @@ impl App {
                     };
 
                     self.popup_state = PopupState::None;
-                    match crate::jj::operations::set_bookmark(&bookmark_name) {
+                    match jj_ops::set_bookmark(&bookmark_name) {
                         Ok(_) => {
                             self.set_status_message(format!("Set bookmark: {bookmark_name}"));
                             self.refresh_status()?;
@@ -283,7 +289,7 @@ impl App {
                 KeyCode::Tab => {
                     // Autocomplete with selected bookmark
                     if !filtered.is_empty() && *selected_index < filtered.len() {
-                        *content = filtered[*selected_index].clone();
+                        *content = filtered[*selected_index].name.clone();
                         *cursor_position = content.chars().count();
                     }
                 }
@@ -375,7 +381,7 @@ impl App {
                         }
                     }
                     Tab::Bookmarks => {
-                        if let Ok(bookmarks) = crate::jj::operations::get_bookmarks()
+                        if let Ok(bookmarks) = jj_ops::get_bookmarks()
                             && !bookmarks.is_empty()
                         {
                             self.selected_bookmark_index =
@@ -383,8 +389,7 @@ impl App {
                         }
                     }
                     Tab::Log => {
-                        if let Ok(commits) =
-                            crate::jj::log::get_log(self.settings.ui.log_commits_count)
+                        if let Ok(commits) = log::get_log(self.settings.ui.log_commits_count)
                             && !commits.is_empty()
                         {
                             self.selected_log_index =
@@ -472,7 +477,7 @@ impl App {
     }
 
     fn track_current_bookmark(&mut self) {
-        match crate::jj::operations::track_current_bookmark() {
+        match jj_ops::track_current_bookmark() {
             Ok(v) => {
                 self.set_status_message(v);
             }
@@ -483,7 +488,7 @@ impl App {
     }
 
     fn restore_working_copy(&mut self) -> Result<()> {
-        match crate::jj::operations::restore_working_copy() {
+        match jj_ops::restore_working_copy() {
             Ok(_) => {
                 self.refresh_status()?;
             }
@@ -523,10 +528,7 @@ impl App {
 
     fn show_bookmark_popup(&mut self) {
         // Fetch available bookmarks
-        let bookmarks = crate::jj::operations::get_bookmarks().map_or_else(
-            |_| Vec::new(),
-            |bookmarks| bookmarks.into_iter().map(|b| b.name).collect(),
-        );
+        let bookmarks = jj_ops::get_bookmarks().unwrap_or_else(|_| Vec::new());
 
         self.popup_state = PopupState::BookmarkSelect {
             content: String::new(),
@@ -556,7 +558,7 @@ impl App {
                     self.show_error(format!("Failed to commit: {e}"));
                 }
             },
-            PopupCallback::Rebase => match crate::jj::operations::rebase(text) {
+            PopupCallback::Rebase => match jj_ops::rebase(text) {
                 Ok(_) => {
                     self.set_status_message(format!("Rebased to {text}"));
                     self.refresh_status()?;
@@ -571,14 +573,14 @@ impl App {
 
     fn handle_new_commit(&mut self) -> Result<()> {
         // Check if working copy is already empty
-        match crate::jj::operations::is_working_copy_empty() {
+        match jj_ops::is_working_copy_empty() {
             Ok(true) => {
                 self.show_warning("Already on an empty commit. Add changes first.".to_string());
                 return Ok(());
             }
             Ok(false) => {
                 // Working copy has changes, proceed with new commit
-                match crate::jj::operations::new_commit() {
+                match jj_ops::new_commit() {
                     Ok(_) => {
                         self.set_status_message("Created new commit".to_string());
                         self.refresh_status()?;
@@ -597,7 +599,7 @@ impl App {
 
     fn handle_fetch(&mut self) -> Result<()> {
         self.show_loading("Fetching from remote".to_string());
-        match crate::jj::operations::git_fetch() {
+        match jj_ops::git_fetch() {
             Ok(_) => {
                 self.clear_loading();
                 self.set_status_message("Fetched from remote".to_string());
@@ -613,8 +615,8 @@ impl App {
 
     fn handle_push(&mut self) -> Result<()> {
         self.show_loading("Pushing to remote".to_string());
-        let bookmark = crate::jj::operations::get_current_bookmark().ok().flatten();
-        match crate::jj::operations::git_push(bookmark.as_deref()) {
+        let bookmark = jj_ops::get_current_bookmark().ok().flatten();
+        match jj_ops::git_push(bookmark.as_deref()) {
             Ok(_) => {
                 self.clear_loading();
                 let msg = bookmark.map_or_else(
@@ -678,13 +680,13 @@ impl App {
     }
 
     fn handle_bookmark_checkout(&mut self) -> Result<()> {
-        let bookmarks = crate::jj::operations::get_bookmarks()?;
+        let bookmarks = jj_ops::get_bookmarks()?;
         if let Some(bookmark) = bookmarks.get(self.selected_bookmark_index) {
-            match crate::jj::operations::checkout_bookmark(&bookmark.name) {
+            match jj_ops::checkout_bookmark(&bookmark.name) {
                 Ok(_) => {
                     self.set_status_message(format!("Checked out bookmark: {}", bookmark.name));
                     // auto track the bookmark
-                    crate::jj::operations::auto_track_bookmark(&bookmark.name).ok();
+                    jj_ops::auto_track_bookmark(&bookmark.name).ok();
                     self.refresh_status()?;
                 }
                 Err(e) => {
