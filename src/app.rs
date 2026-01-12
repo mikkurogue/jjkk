@@ -547,7 +547,7 @@ impl App {
                     self.show_error(format!("Failed to describe: {e}"));
                 }
             },
-            PopupCallback::Commit => match crate::jj::operations::commit(text) {
+            PopupCallback::Commit => match self.native_ops.commit(text) {
                 Ok(_) => {
                     self.set_status_message("Committed successfully".to_string());
                     self.refresh_status()?;

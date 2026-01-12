@@ -74,42 +74,6 @@ pub fn get_file_diff(file_path: &str) -> Result<String> {
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
-/// Describe the current change with a message
-/// Executes `jj describe -m <message>` command
-pub fn describe(message: &str) -> Result<String> {
-    let output = Command::new("jj")
-        .args(["describe", "-m", message])
-        .output()
-        .context("Failed to run jj describe")?;
-
-    if !output.status.success() {
-        anyhow::bail!(
-            "jj describe failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
-}
-
-/// Commit a change and create a new empty commit on the working copy.
-/// Executes `jj commit -m <message>` command
-pub fn commit(message: &str) -> Result<String> {
-    let output = Command::new("jj")
-        .args(["commit", "-m", message])
-        .output()
-        .context("Failed to run jj commit")?;
-
-    if !output.status.success() {
-        anyhow::bail!(
-            "jj commit failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
-}
-
 /// Create a new empty commit on the working copy.
 /// Executes `jj new` command
 pub fn new_commit() -> Result<String> {
