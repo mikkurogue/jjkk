@@ -27,6 +27,25 @@ pub fn track_current_bookmark() -> Result<String> {
     }
 }
 
+/// basically a copy of track_current_bookmark but takes a name argument
+/// to track a specific bookmark handy for when we create a new bookmark
+/// and want to track it right away
+pub fn auto_track_bookmark(name: &str) -> Result<String> {
+    let output = Command::new("jj")
+        .args(["bookmark", "track", name, "--remote=origin"])
+        .output()
+        .context("Failed to run jj bookmark track")?;
+
+    if !output.status.success() {
+        anyhow::bail!(
+            "jj track failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
 /// Restore the working copy of a jj repository
 /// Executes `jj restore` command
 pub fn restore_working_copy() -> Result<String> {
@@ -270,16 +289,34 @@ pub fn get_bookmarks() -> Result<Vec<BookmarkInfo>> {
     Ok(bookmarks)
 }
 
-/// Start work on a bookmark by creating a new change at that bookmark
-/// Executes `jj new <name>` command
-pub fn checkout_bookmark(name: &str) -> Result<String> {
+/// Move to a specified bookmark instead.
+/// Executes `jj set <bookmark>` command
+pub fn checkout_bookmark(bookmark: &str) -> Result<String> {
     let output = Command::new("jj")
-        .args(["new", name])
+        .args(["set", bookmark])
         .output()
         .context("Failed to checkout bookmark")?;
 
     if !output.status.success() {
         anyhow::bail!("jj new failed: {}", String::from_utf8_lossy(&output.stderr));
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+/// Start work on a new commit based on a bookmark
+/// Executes `jj new <bookmark>` command
+pub fn new_on_bookmark(bookmark: &str) -> Result<String> {
+    let output = Command::new("jj")
+        .args(["new", bookmark])
+        .output()
+        .context("Failed to create new change on bookmark")?;
+
+    if !output.status.success() {
+        anyhow::bail!(
+            "jj new on bookmark failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     Ok(String::from_utf8_lossy(&output.stdout).to_string())

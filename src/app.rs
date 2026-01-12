@@ -674,6 +674,8 @@ impl App {
             match crate::jj::operations::checkout_bookmark(&bookmark.name) {
                 Ok(_) => {
                     self.set_status_message(format!("Checked out bookmark: {}", bookmark.name));
+                    // auto track the bookmark
+                    crate::jj::operations::auto_track_bookmark(&bookmark.name).ok();
                     self.refresh_status()?;
                 }
                 Err(e) => {
