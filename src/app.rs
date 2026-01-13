@@ -67,7 +67,7 @@ pub enum PopupState {
     None,
     Input {
         title:    String,
-        textarea: TextArea<'static>,
+        textarea: Box<TextArea<'static>>,
         callback: PopupCallback,
     },
     BookmarkSelect {
@@ -500,7 +500,7 @@ impl App {
     fn show_describe_popup(&mut self) {
         self.popup_state = PopupState::Input {
             title:    "Describe".to_string(),
-            textarea: TextArea::default(),
+            textarea: Box::new(TextArea::default()),
             callback: PopupCallback::Describe,
         };
     }
@@ -508,7 +508,7 @@ impl App {
     fn show_commit_popup(&mut self) {
         self.popup_state = PopupState::Input {
             title:    "Commit".to_string(),
-            textarea: TextArea::default(),
+            textarea: Box::new(TextArea::default()),
             callback: PopupCallback::Commit,
         };
     }
@@ -516,7 +516,7 @@ impl App {
     fn show_rebase_popup(&mut self) {
         self.popup_state = PopupState::Input {
             title:    "Rebase destination".to_string(),
-            textarea: TextArea::default(),
+            textarea: Box::new(TextArea::default()),
             callback: PopupCallback::Rebase,
         };
     }

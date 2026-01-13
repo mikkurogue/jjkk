@@ -141,7 +141,7 @@ fn render_diff_view(f: &mut Frame, app: &App, area: Rect) {
                             || Line::from(Span::styled(line, Style::default().fg(app.theme.green))),
                             |syntax| {
                                 let mut h = HighlightLines::new(syntax, theme);
-                                let ranges = h.highlight_line(content, &ps).unwrap_or_default();
+                                let ranges = h.highlight_line(content, ps).unwrap_or_default();
                                 let spans: Vec<Span> = std::iter::once(Span::styled(
                                     "+",
                                     Style::default().fg(app.theme.green),
@@ -162,7 +162,7 @@ fn render_diff_view(f: &mut Frame, app: &App, area: Rect) {
                             || Line::from(Span::styled(line, Style::default().fg(app.theme.red))),
                             |syntax| {
                                 let mut h = HighlightLines::new(syntax, theme);
-                                let ranges = h.highlight_line(content, &ps).unwrap_or_default();
+                                let ranges = h.highlight_line(content, ps).unwrap_or_default();
                                 let spans: Vec<Span> = std::iter::once(Span::styled(
                                     "-",
                                     Style::default().fg(app.theme.red),
@@ -181,7 +181,7 @@ fn render_diff_view(f: &mut Frame, app: &App, area: Rect) {
                             || Line::from(Span::styled(line, Style::default().fg(app.theme.text))),
                             |syntax| {
                                 let mut h = HighlightLines::new(syntax, theme);
-                                let ranges = h.highlight_line(line, &ps).unwrap_or_default();
+                                let ranges = h.highlight_line(line, ps).unwrap_or_default();
                                 let spans: Vec<Span> = ranges
                                     .into_iter()
                                     .map(|(style, text)| {

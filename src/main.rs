@@ -77,11 +77,11 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()> 
             app.needs_redraw = false;
         }
 
-        if event::poll(std::time::Duration::from_millis(100))? {
-            if let Event::Key(key) = event::read()? {
-                app.handle_key_event(key)?;
-                app.needs_redraw = true; // Mark for redraw after handling input
-            }
+        if event::poll(std::time::Duration::from_millis(100))?
+            && let Event::Key(key) = event::read()?
+        {
+            app.handle_key_event(key)?;
+            app.needs_redraw = true; // Mark for redraw after handling input
         }
 
         if app.should_quit {

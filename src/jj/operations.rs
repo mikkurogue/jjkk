@@ -235,12 +235,10 @@ pub fn get_bookmarks() -> Result<Vec<BookmarkInfo>> {
         if let Some(colon_pos) = line.find(':') {
             let bookmark_name = line[..colon_pos].trim();
 
-            // Remove any status indicators like (conflicted), (deleted), etc.
-            let bookmark_name = if let Some(paren_pos) = bookmark_name.find(" (") {
-                bookmark_name[..paren_pos].trim()
-            } else {
-                bookmark_name
-            };
+            let bookmark_name = bookmark_name
+                .find(" (")
+                .map_or(bookmark_name, |pos| &bookmark_name[..pos])
+                .trim();
 
             if bookmark_name.is_empty() {
                 continue;

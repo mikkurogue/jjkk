@@ -59,10 +59,10 @@ impl Native {
             .map(|re| re.as_str().to_owned())
             .collect();
 
-        let default_remote = if !remote_names.is_empty() {
-            remote_names[0].as_str().to_owned()
-        } else {
+        let default_remote = if remote_names.is_empty() {
             String::from("origin")
+        } else {
+            remote_names[0].as_str().to_owned()
         };
 
         Self {
@@ -161,7 +161,10 @@ impl Native {
     /// Fetch changes from the remote git repository using native jj-lib
     /// This is a native implementation using the jj-lib crate instead of CLI interop
     pub fn git_fetch(&self, remote: Option<&str>) -> Result<String> {
-        let remote = remote.map_or(self.default_remote.to_owned(), |r| r.to_owned());
+        let remote = remote.map_or_else(
+            || self.default_remote.clone(),
+            std::borrow::ToOwned::to_owned,
+        );
 
         // Start a transaction
         let mut tx = self.repo.start_transaction();
@@ -188,7 +191,7 @@ impl Native {
 
         // Expand the default fetch refspecs for the remote
         // This determines what refs to fetch (typically refs/heads/*)
-        let (_ignored_refspecs, refspecs) = expand_default_fetch_refspecs(&remote_name, &git_repo)?;
+        let (_ignored_refspecs, refspecs) = expand_default_fetch_refspecs(remote_name, &git_repo)?;
 
         // Create GitFetch handler (after we're done with the immutable borrow above)
         let mut git_fetch = GitFetch::new(tx.repo_mut(), subprocess_options, &import_options)?;
@@ -204,7 +207,7 @@ impl Native {
         // - callbacks: progress reporting
         // - depth: None for full history (could use Some(n) for shallow fetch)
         // - fetch_tags_override: None to use git config default
-        git_fetch.fetch(&remote_name, refspecs, callbacks, None, None)?;
+        git_fetch.fetch(remote_name, refspecs, callbacks, None, None)?;
 
         // Import the fetched refs into jj's view
         let stats = git_fetch.import_refs()?;
