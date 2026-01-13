@@ -67,41 +67,46 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
     render_status_bar(f, app, chunks[2]);
 
     // Render popups on top
-    match &app.popup_state {
-        PopupState::Input {
-            title,
-            content,
-            cursor_position,
+    // Handle Input popup separately due to mutable borrow of textarea
+    if matches!(app.popup_state, PopupState::Input { .. }) {
+        let theme = &app.theme;
+        if let PopupState::Input {
+            ref title,
+            ref mut textarea,
             ..
-        } => {
-            render_input_popup(f, app, title, content, *cursor_position, size);
+        } = app.popup_state
+        {
+            render_input_popup(f, theme, title.as_str(), textarea, size);
         }
-        PopupState::BookmarkSelect {
-            content,
-            cursor_position,
-            available_bookmarks,
-            selected_index,
-        } => {
-            render_bookmark_select_popup(
-                f,
-                app,
+    } else {
+        match &app.popup_state {
+            PopupState::BookmarkSelect {
                 content,
-                *cursor_position,
+                cursor_position,
                 available_bookmarks,
-                *selected_index,
-                size,
-            );
+                selected_index,
+            } => {
+                render_bookmark_select_popup(
+                    f,
+                    app,
+                    content,
+                    *cursor_position,
+                    available_bookmarks,
+                    *selected_index,
+                    size,
+                );
+            }
+            PopupState::Error { message } => {
+                render_feedback_popup(f, app, message, size, &FeedbackType::Error);
+            }
+            PopupState::Warning { message } => {
+                render_feedback_popup(f, app, message, size, &FeedbackType::Warning);
+            }
+            PopupState::Help => {
+                render_help_popup(f, app, size);
+            }
+            PopupState::None | PopupState::Input { .. } => {}
         }
-        PopupState::Error { message } => {
-            render_feedback_popup(f, app, message, size, &FeedbackType::Error);
-        }
-        PopupState::Warning { message } => {
-            render_feedback_popup(f, app, message, size, &FeedbackType::Warning);
-        }
-        PopupState::Help => {
-            render_help_popup(f, app, size);
-        }
-        PopupState::None => {}
     }
 }
 
