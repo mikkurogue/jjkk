@@ -42,7 +42,7 @@ const fn default_visible_diff_lines() -> usize {
 }
 
 const fn default_log_commits_count() -> usize {
-    10
+    100
 }
 
 impl Default for ThemeSettings {

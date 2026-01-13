@@ -26,6 +26,7 @@ use crate::{
 pub fn render_log(f: &mut Frame, app: &mut App, area: Rect) {
     // Get log with configured limit
     let limit = app.settings.ui.log_commits_count;
+
     let commits = match log::get_log(limit) {
         Ok(c) => c,
         Err(e) => {
