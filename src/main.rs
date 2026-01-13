@@ -67,10 +67,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()>
-where
-    <B as Backend>::Error: Send + Sync + 'static,
-{
+fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()> {
     loop {
         app.update_status_message_timeout();
 

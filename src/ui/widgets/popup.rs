@@ -25,9 +25,11 @@ use ratatui::{
         Wrap,
     },
 };
+use tui_textarea::TextArea;
 
 use crate::{
     app::App,
+    config::Theme,
     jj::operations::BookmarkInfo,
 };
 
@@ -38,50 +40,46 @@ pub enum FeedbackType {
 
 pub fn render_input_popup(
     f: &mut Frame,
-    app: &App,
+    theme: &Theme,
     title: &str,
-    content: &str,
-    cursor_position: usize,
+    textarea: &mut TextArea<'static>,
     area: Rect,
 ) {
     let popup_area = centered_rect(60, 40, area);
 
-    let block = Block::default()
-        .title(title)
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(app.theme.lavender))
-        .style(Style::default().bg(app.theme.surface0));
+    // Create an owned string for the title to satisfy 'static lifetime
+    let title_owned = title.to_string();
 
-    // Insert cursor character at cursor position
-    let content_with_cursor = if content.is_empty() {
-        "█".to_string()
-    } else {
-        let mut chars: Vec<char> = content.chars().collect();
-        // Insert block cursor at position
-        if cursor_position >= chars.len() {
-            chars.push('█');
-        } else {
-            chars.insert(cursor_position, '█');
-        }
-        chars.into_iter().collect()
+    // Create a block with the title
+    let block = Block::default()
+        .title(title_owned)
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(theme.lavender))
+        .style(Style::default().bg(theme.surface0));
+
+    // Set textarea block and styling
+    textarea.set_block(block);
+    textarea.set_cursor_line_style(Style::default());
+    textarea.set_style(Style::default().fg(theme.text).bg(theme.surface0));
+
+    // Render the textarea widget
+    f.render_widget(Clear, popup_area);
+    f.render_widget(&*textarea, popup_area);
+
+    // Render help text below
+    let help_area = Rect {
+        x:      popup_area.x + 1,
+        y:      popup_area.y + popup_area.height.saturating_sub(2),
+        width:  popup_area.width.saturating_sub(2),
+        height: 1,
     };
 
-    let text = vec![
-        Line::from(content_with_cursor),
-        Line::from(""),
-        Line::from(Span::styled(
-            "Enter to confirm | Shift/Ctrl/Alt+Enter for newline | Esc to cancel",
-            Style::default().fg(app.theme.subtext0),
-        )),
-    ];
+    let help_text = Paragraph::new(Span::styled(
+        "Enter to confirm | Alt+Enter for newline | Esc to cancel",
+        Style::default().fg(theme.subtext0),
+    ));
 
-    let paragraph = Paragraph::new(text)
-        .block(block)
-        .wrap(Wrap { trim: false })
-        .style(Style::default().fg(app.theme.text));
-
-    f.render_widget(Clear, popup_area);
-    f.render_widget(paragraph, popup_area);
+    f.render_widget(help_text, help_area);
 }
 
 pub fn render_feedback_popup(
@@ -195,9 +193,7 @@ pub fn render_help_popup(f: &mut Frame, app: &App, area: Rect) {
                 .add_modifier(Modifier::BOLD),
         )),
         Line::from("  Enter             Submit/confirm"),
-        Line::from("  Shift+Enter       Insert newline"),
-        Line::from("  Ctrl+Enter        Insert newline (alt)"),
-        Line::from("  Alt+Enter         Insert newline (alt)"),
+        Line::from("  Alt+Enter         Insert newline"),
         Line::from("  Esc               Cancel"),
         Line::from(""),
         Line::from(Span::styled(

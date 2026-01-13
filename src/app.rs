@@ -11,6 +11,7 @@ use syntect::{
     highlighting::ThemeSet,
     parsing::SyntaxSet,
 };
+use tui_textarea::TextArea;
 
 use crate::{
     config::{
@@ -65,10 +66,9 @@ impl Tab {
 pub enum PopupState {
     None,
     Input {
-        title:           String,
-        content:         String,
-        cursor_position: usize,
-        callback:        PopupCallback,
+        title:    String,
+        textarea: TextArea<'static>,
+        callback: PopupCallback,
     },
     BookmarkSelect {
         content: String,
@@ -184,71 +184,30 @@ impl App {
     }
 
     pub fn handle_key_event(&mut self, key: KeyEvent) -> Result<()> {
-        // Handle popup input first
+        // Handle popup input first with tui-textarea
         if let PopupState::Input {
-            ref mut content,
-            ref mut cursor_position,
+            ref mut textarea,
             callback,
             ..
         } = self.popup_state
         {
-            // Helper to get byte position from character position
-            let char_to_byte = |s: &str, char_pos: usize| -> usize {
-                s.char_indices()
-                    .nth(char_pos)
-                    .map_or(s.len(), |(byte_pos, _)| byte_pos)
-            };
-
             match key.code {
                 KeyCode::Esc => {
                     self.popup_state = PopupState::None;
                 }
-                KeyCode::Enter => {
-                    // Support multiple key combinations for newline insertion
-                    // This improves compatibility across different terminal emulators
-                    let is_newline_request = key.modifiers.contains(KeyModifiers::SHIFT)
-                        || key.modifiers.contains(KeyModifiers::CONTROL)
-                        || key.modifiers.contains(KeyModifiers::ALT);
-
-                    if is_newline_request {
-                        // Insert newline character
-                        let byte_pos = char_to_byte(content, *cursor_position);
-                        content.insert(byte_pos, '\n');
-                        *cursor_position += 1;
-                    } else {
-                        // Regular Enter submits the form
-                        let text = content.clone();
-                        let cb = callback;
-                        self.popup_state = PopupState::None;
-                        self.execute_popup_callback(cb, &text)?;
-                    }
+                KeyCode::Enter if !key.modifiers.contains(KeyModifiers::ALT) => {
+                    // Regular Enter (no modifiers) submits the form
+                    let text = textarea.lines().join("\n");
+                    let cb = callback;
+                    self.popup_state = PopupState::None;
+                    self.execute_popup_callback(cb, &text)?;
                 }
-                KeyCode::Char(c) => {
-                    let byte_pos = char_to_byte(content, *cursor_position);
-                    content.insert(byte_pos, c);
-                    *cursor_position += 1;
+                _ => {
+                    // Convert KeyEvent to tui_textarea::Input
+                    // tui-textarea expects crossterm::event::Event, not just KeyEvent
+                    use crossterm::event::Event;
+                    textarea.input(Event::Key(key));
                 }
-                KeyCode::Backspace => {
-                    if *cursor_position > 0 {
-                        *cursor_position -= 1;
-                        let byte_pos = char_to_byte(content, *cursor_position);
-                        content.remove(byte_pos);
-                    }
-                }
-                KeyCode::Left => {
-                    *cursor_position = cursor_position.saturating_sub(1);
-                }
-                KeyCode::Right => {
-                    let char_len = content.chars().count();
-                    *cursor_position = (*cursor_position + 1).min(char_len);
-                }
-                KeyCode::Home => {
-                    *cursor_position = 0;
-                }
-                KeyCode::End => {
-                    *cursor_position = content.chars().count();
-                }
-                _ => {}
             }
             return Ok(());
         }
@@ -540,28 +499,25 @@ impl App {
 
     fn show_describe_popup(&mut self) {
         self.popup_state = PopupState::Input {
-            title:           "Describe".to_string(),
-            content:         String::new(),
-            cursor_position: 0,
-            callback:        PopupCallback::Describe,
+            title:    "Describe".to_string(),
+            textarea: TextArea::default(),
+            callback: PopupCallback::Describe,
         };
     }
 
     fn show_commit_popup(&mut self) {
         self.popup_state = PopupState::Input {
-            title:           "Commit".to_string(),
-            content:         String::new(),
-            cursor_position: 0,
-            callback:        PopupCallback::Commit,
+            title:    "Commit".to_string(),
+            textarea: TextArea::default(),
+            callback: PopupCallback::Commit,
         };
     }
 
     fn show_rebase_popup(&mut self) {
         self.popup_state = PopupState::Input {
-            title:           "Rebase destination".to_string(),
-            content:         String::new(),
-            cursor_position: 0,
-            callback:        PopupCallback::Rebase,
+            title:    "Rebase destination".to_string(),
+            textarea: TextArea::default(),
+            callback: PopupCallback::Rebase,
         };
     }
 
