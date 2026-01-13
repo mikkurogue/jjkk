@@ -89,24 +89,6 @@ pub fn new_commit() -> Result<String> {
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
-/// Fetch changes from the remote git repository
-/// Executes `jj git fetch` command
-pub fn git_fetch() -> Result<String> {
-    let output = Command::new("jj")
-        .args(["git", "fetch"])
-        .output()
-        .context("Failed to run jj git fetch")?;
-
-    if !output.status.success() {
-        anyhow::bail!(
-            "jj git fetch failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
-}
-
 /// Push changes to the remote git repository
 /// If a bookmark is provided, push that bookmark
 /// Otherwise, push the current change
@@ -282,15 +264,18 @@ pub fn get_bookmarks() -> Result<Vec<BookmarkInfo>> {
 }
 
 /// Move to a specified bookmark instead.
-/// Executes `jj set <bookmark>` command
+/// Executes `jj bookmark set <bookmark>` command
 pub fn checkout_bookmark(bookmark: &str) -> Result<String> {
     let output = Command::new("jj")
-        .args(["set", bookmark])
+        .args(["bookmark", "set", bookmark])
         .output()
         .context("Failed to checkout bookmark")?;
 
     if !output.status.success() {
-        anyhow::bail!("jj new failed: {}", String::from_utf8_lossy(&output.stderr));
+        anyhow::bail!(
+            "jj bookmark set failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     Ok(String::from_utf8_lossy(&output.stdout).to_string())

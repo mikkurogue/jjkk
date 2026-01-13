@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    sync::Arc,
+};
 
 use anyhow::{
     Ok,
@@ -9,7 +12,16 @@ use jj_lib::{
         ConfigSource,
         StackedConfig,
     },
+    git::{
+        GitFetch,
+        GitImportOptions,
+        GitSubprocessOptions,
+        RemoteCallbacks,
+        expand_default_fetch_refspecs,
+        get_git_repo,
+    },
     object_id::ObjectId,
+    ref_name::RemoteName,
     repo::{
         ReadonlyRepo,
         Repo,
@@ -31,55 +43,13 @@ impl Native {
     /// Create a new native jj operation handler
     /// for now its empty
     pub fn new() -> Self {
-        let workspace = Self::detect_workspace().expect("Failed to detect workspace");
+        let workspace = detect_workspace().expect("Failed to detect workspace");
         let repo = workspace
             .repo_loader()
             .load_at_head()
             .expect("Failed to load repo head");
 
         Self { workspace, repo }
-    }
-
-    fn detect_workspace() -> Result<Workspace> {
-        // Create user settings from default config
-        let user_settings = Self::detect_user_settings()?;
-
-        // Load the workspace
-        let workspace = Workspace::load(
-            &user_settings,
-            std::path::Path::new("."),
-            &StoreFactories::default(),
-            &default_working_copy_factories(),
-        )?;
-
-        Ok(workspace)
-    }
-
-    fn detect_config() -> Result<StackedConfig> {
-        // Create stacked config with defaults
-        let mut config = StackedConfig::with_defaults();
-
-        // Load user config from standard location (~/.config/jj/config.toml)
-        if let Some(config_dir) = dirs::config_dir() {
-            let user_config_path = config_dir.join("jj").join("config.toml");
-            if user_config_path.exists() {
-                config.load_file(ConfigSource::User, user_config_path)?;
-            }
-        }
-
-        // Load repo config from .jj/repo/config.toml if it exists
-        let repo_config_path = std::path::Path::new(".jj/repo/config.toml");
-        if repo_config_path.exists() {
-            config.load_file(ConfigSource::Repo, repo_config_path)?;
-        }
-
-        Ok(config)
-    }
-
-    fn detect_user_settings() -> Result<UserSettings> {
-        let config = Self::detect_config()?;
-        let user_settings = UserSettings::from_config(config)?;
-        Ok(user_settings)
     }
 
     /// Describe the current change with a message using jj-lib
@@ -166,6 +136,110 @@ impl Native {
             message
         ))
     }
+
+    /// Fetch changes from the remote git repository using native jj-lib
+    /// This is a native implementation using the jj-lib crate instead of CLI interop
+    pub fn git_fetch(&self) -> Result<String> {
+        // Start a transaction
+        let mut tx = self.repo.start_transaction();
+
+        // Get user settings for subprocess options
+        let user_settings = detect_user_settings()?;
+
+        // Create subprocess options from settings
+        let subprocess_options = GitSubprocessOptions::from_settings(&user_settings)?;
+
+        // Create import options with defaults
+        // These control how Git refs are imported into jj
+        let import_options = GitImportOptions {
+            auto_local_bookmark:         false, // Don't auto-create local bookmarks
+            abandon_unreachable_commits: true,  // Clean up unreachable commits
+            remote_auto_track_bookmarks: HashMap::new(), // Use default tracking config
+        };
+
+        // Get the underlying git repository before creating GitFetch
+        // We need this to expand refspecs
+        let git_repo = get_git_repo(tx.repo().store())?;
+
+        // Use "origin" as the default remote name
+        // TODO: Make this configurable or detect from git config
+        let remote_name = RemoteName::new("origin");
+
+        // Expand the default fetch refspecs for the remote
+        // This determines what refs to fetch (typically refs/heads/*)
+        let (_ignored_refspecs, refspecs) = expand_default_fetch_refspecs(&remote_name, &git_repo)?;
+
+        // Create GitFetch handler (after we're done with the immutable borrow above)
+        let mut git_fetch = GitFetch::new(tx.repo_mut(), subprocess_options, &import_options)?;
+
+        // Set up callbacks for progress reporting (currently no-op)
+        // You can extend this to provide progress updates
+        let callbacks = RemoteCallbacks::default();
+
+        // Perform the actual fetch operation
+        // Parameters:
+        // - remote_name: "origin"
+        // - refspecs: what to fetch
+        // - callbacks: progress reporting
+        // - depth: None for full history (could use Some(n) for shallow fetch)
+        // - fetch_tags_override: None to use git config default
+        git_fetch.fetch(&remote_name, refspecs, callbacks, None, None)?;
+
+        // Import the fetched refs into jj's view
+        let stats = git_fetch.import_refs()?;
+
+        // Commit the transaction
+        tx.commit("fetch from git remote")?;
+
+        // Return a summary of what was fetched
+        Ok(format!(
+            "Fetched from origin\n\
+             {} remote bookmarks imported",
+            stats.changed_remote_bookmarks.len()
+        ))
+    }
+}
+
+fn detect_workspace() -> Result<Workspace> {
+    // Create user settings from default config
+    let user_settings = detect_user_settings()?;
+
+    // Load the workspace
+    let workspace = Workspace::load(
+        &user_settings,
+        std::path::Path::new("."),
+        &StoreFactories::default(),
+        &default_working_copy_factories(),
+    )?;
+
+    Ok(workspace)
+}
+
+fn detect_config() -> Result<StackedConfig> {
+    // Create stacked config with defaults
+    let mut config = StackedConfig::with_defaults();
+
+    // Load user config from standard location (~/.config/jj/config.toml)
+    if let Some(config_dir) = dirs::config_dir() {
+        let user_config_path = config_dir.join("jj").join("config.toml");
+        if user_config_path.exists() {
+            config.load_file(ConfigSource::User, user_config_path)?;
+        }
+    }
+
+    // Load repo config from .jj/repo/config.toml if it exists
+    let repo_config_path = std::path::Path::new(".jj/repo/config.toml");
+    if repo_config_path.exists() {
+        config.load_file(ConfigSource::Repo, repo_config_path)?;
+    }
+
+    Ok(config)
+}
+
+fn detect_user_settings() -> Result<UserSettings> {
+    let config = detect_config()?;
+    let user_settings = UserSettings::from_config(config)?;
+    Ok(user_settings)
 }
 
 #[cfg(test)]
@@ -195,5 +269,15 @@ mod tests {
         let commit_result = native.commit("Test commit from jj-lib");
         println!("{:?}", commit_result);
         assert!(commit_result.is_ok());
+    }
+
+    #[test]
+    #[ignore] // Only run manually in a jj repo with a git remote configured
+    fn test_git_fetch_jj() {
+        let native = Native::new();
+
+        let result = native.git_fetch();
+        println!("{:?}", result);
+        assert!(result.is_ok());
     }
 }

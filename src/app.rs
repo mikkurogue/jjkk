@@ -598,15 +598,14 @@ impl App {
     }
 
     fn handle_fetch(&mut self) -> Result<()> {
-        self.show_loading("Fetching from remote".to_string());
-        match jj_ops::git_fetch() {
+        self.loading_start = Some(Instant::now());
+        match self.native_ops.git_fetch() {
             Ok(_) => {
                 self.clear_loading();
                 self.set_status_message("Fetched from remote".to_string());
                 self.refresh_status()?;
             }
             Err(e) => {
-                self.clear_loading();
                 self.show_error(format!("Failed to fetch: {e}"));
             }
         }
