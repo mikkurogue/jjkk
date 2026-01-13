@@ -24,18 +24,14 @@ use ratatui::{
         Wrap,
     },
 };
-use syntect::{
-    easy::HighlightLines,
-    highlighting::ThemeSet,
-    parsing::SyntaxSet,
-};
+use syntect::easy::HighlightLines;
 
 use crate::{
     app::App,
     jj::repo::ChangeType,
 };
 
-pub fn render_working_copy(f: &mut Frame, app: &App, area: Rect) {
+pub fn render_working_copy(f: &mut Frame, app: &mut App, area: Rect) {
     // Split into left (file list) and right (diff view)
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
@@ -49,7 +45,7 @@ pub fn render_working_copy(f: &mut Frame, app: &App, area: Rect) {
     render_diff_view(f, app, chunks[1]);
 }
 
-fn render_file_list(f: &mut Frame, app: &App, area: Rect) {
+fn render_file_list(f: &mut Frame, app: &mut App, area: Rect) {
     let items: Vec<ListItem> = app
         .files
         .iter()
@@ -86,9 +82,14 @@ fn render_file_list(f: &mut Frame, app: &App, area: Rect) {
                 .title("Files")
                 .border_style(Style::default().fg(app.theme.surface1)),
         )
-        .style(Style::default().bg(app.theme.base));
+        .style(Style::default().bg(app.theme.base))
+        .highlight_style(
+            Style::default()
+                .bg(app.theme.surface1)
+                .add_modifier(Modifier::BOLD),
+        );
 
-    f.render_widget(list, area);
+    f.render_stateful_widget(list, area, &mut app.file_list_state);
 }
 
 fn render_diff_view(f: &mut Frame, app: &App, area: Rect) {
@@ -107,10 +108,9 @@ fn render_diff_view(f: &mut Frame, app: &App, area: Rect) {
                 .get(app.selected_file_index)
                 .map(|f| f.path.as_str());
 
-            // Initialize syntect
-            let ps = SyntaxSet::load_defaults_newlines();
-            let ts = ThemeSet::load_defaults();
-            let theme = &ts.themes["base16-ocean.dark"];
+            // Use cached syntect resources from app
+            let ps = &app.syntax_set;
+            let theme = &app.theme_set.themes["base16-ocean.dark"];
 
             // // Try to detect syntax from file path
             let syntax = file_path

@@ -6,6 +6,11 @@ use crossterm::event::{
     KeyEvent,
     KeyModifiers,
 };
+use ratatui::widgets::ListState;
+use syntect::{
+    highlighting::ThemeSet,
+    parsing::SyntaxSet,
+};
 
 use crate::{
     config::{
@@ -109,6 +114,18 @@ pub struct App {
     pub current_diff: Option<String>,
 
     pub native_ops: Native,
+
+    // Performance optimization: cache syntax highlighting resources
+    pub syntax_set: SyntaxSet,
+    pub theme_set:  ThemeSet,
+
+    // Redraw optimization: only redraw when needed
+    pub needs_redraw: bool,
+
+    // List virtualization: stateful widgets for better performance
+    pub file_list_state:     ListState,
+    pub bookmark_list_state: ListState,
+    pub log_list_state:      ListState,
 }
 
 impl App {
@@ -136,6 +153,12 @@ impl App {
             files: Vec::new(),
             current_diff: None,
             native_ops: Native::new(),
+            syntax_set: SyntaxSet::load_defaults_newlines(),
+            theme_set: ThemeSet::load_defaults(),
+            needs_redraw: true,
+            file_list_state: ListState::default(),
+            bookmark_list_state: ListState::default(),
+            log_list_state: ListState::default(),
         })
     }
 
@@ -144,8 +167,10 @@ impl App {
         self.selected_file_index = self
             .selected_file_index
             .min(self.files.len().saturating_sub(1));
+        self.file_list_state.select(Some(self.selected_file_index));
         self.diff_scroll_offset = 0;
         self.update_diff()?;
+        self.needs_redraw = true;
         Ok(())
     }
 
@@ -179,8 +204,14 @@ impl App {
                     self.popup_state = PopupState::None;
                 }
                 KeyCode::Enter => {
-                    // Shift+Enter inserts a newline
-                    if key.modifiers.contains(KeyModifiers::SHIFT) {
+                    // Support multiple key combinations for newline insertion
+                    // This improves compatibility across different terminal emulators
+                    let is_newline_request = key.modifiers.contains(KeyModifiers::SHIFT)
+                        || key.modifiers.contains(KeyModifiers::CONTROL)
+                        || key.modifiers.contains(KeyModifiers::ALT);
+
+                    if is_newline_request {
+                        // Insert newline character
                         let byte_pos = char_to_byte(content, *cursor_position);
                         content.insert(byte_pos, '\n');
                         *cursor_position += 1;
@@ -376,6 +407,7 @@ impl App {
                         if !self.files.is_empty() {
                             self.selected_file_index =
                                 (self.selected_file_index + 1).min(self.files.len() - 1);
+                            self.file_list_state.select(Some(self.selected_file_index));
                             self.update_diff()?;
                             self.diff_scroll_offset = 0; // Reset scroll when changing files
                         }
@@ -386,6 +418,8 @@ impl App {
                         {
                             self.selected_bookmark_index =
                                 (self.selected_bookmark_index + 1).min(bookmarks.len() - 1);
+                            self.bookmark_list_state
+                                .select(Some(self.selected_bookmark_index));
                         }
                     }
                     Tab::Log => {
@@ -394,6 +428,7 @@ impl App {
                         {
                             self.selected_log_index =
                                 (self.selected_log_index + 1).min(commits.len() - 1);
+                            self.log_list_state.select(Some(self.selected_log_index));
                         }
                     }
                 }
@@ -402,15 +437,19 @@ impl App {
                 match self.current_tab {
                     Tab::WorkingCopy => {
                         self.selected_file_index = self.selected_file_index.saturating_sub(1);
+                        self.file_list_state.select(Some(self.selected_file_index));
                         self.update_diff()?;
                         self.diff_scroll_offset = 0; // Reset scroll when changing files
                     }
                     Tab::Bookmarks => {
                         self.selected_bookmark_index =
                             self.selected_bookmark_index.saturating_sub(1);
+                        self.bookmark_list_state
+                            .select(Some(self.selected_bookmark_index));
                     }
                     Tab::Log => {
                         self.selected_log_index = self.selected_log_index.saturating_sub(1);
+                        self.log_list_state.select(Some(self.selected_log_index));
                     }
                 }
             }
@@ -639,11 +678,13 @@ impl App {
     pub fn set_status_message(&mut self, message: String) {
         self.status_message = Some(message);
         self.status_message_timestamp = Some(Instant::now());
+        self.needs_redraw = true;
     }
 
     pub fn clear_status_message(&mut self) {
         self.status_message = None;
         self.status_message_timestamp = None;
+        self.needs_redraw = true;
     }
 
     pub fn update_status_message_timeout(&mut self) {
@@ -665,11 +706,13 @@ impl App {
     pub fn show_loading(&mut self, message: String) {
         self.loading_message = Some(message);
         self.loading_start = Some(Instant::now());
+        self.needs_redraw = true;
     }
 
     pub fn clear_loading(&mut self) {
         self.loading_message = None;
         self.loading_start = None;
+        self.needs_redraw = true;
     }
 
     pub fn get_spinner_char(&self) -> char {
