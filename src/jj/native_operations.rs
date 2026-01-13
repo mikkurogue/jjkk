@@ -18,6 +18,7 @@ use jj_lib::{
         GitSubprocessOptions,
         RemoteCallbacks,
         expand_default_fetch_refspecs,
+        get_all_remote_names,
         get_git_repo,
     },
     object_id::ObjectId,
@@ -35,8 +36,11 @@ use jj_lib::{
 };
 
 pub struct Native {
-    pub workspace: Workspace,
-    pub repo:      Arc<ReadonlyRepo>,
+    pub workspace:      Workspace,
+    pub repo:           Arc<ReadonlyRepo>,
+    #[allow(dead_code)] // - not actually dead code, just not yet used in a user facing way
+    pub origin_names: Vec<String>,
+    pub default_remote: String,
 }
 
 impl Native {
@@ -49,7 +53,24 @@ impl Native {
             .load_at_head()
             .expect("Failed to load repo head");
 
-        Self { workspace, repo }
+        let remote_names = get_all_remote_names(repo.store()).expect("Failed to get remotes");
+        let remotes = remote_names
+            .iter()
+            .map(|re| re.as_str().to_owned())
+            .collect();
+
+        let default_remote = if !remote_names.is_empty() {
+            remote_names[0].as_str().to_owned()
+        } else {
+            String::from("origin")
+        };
+
+        Self {
+            workspace,
+            repo,
+            origin_names: remotes,
+            default_remote,
+        }
     }
 
     /// Describe the current change with a message using jj-lib
@@ -139,7 +160,9 @@ impl Native {
 
     /// Fetch changes from the remote git repository using native jj-lib
     /// This is a native implementation using the jj-lib crate instead of CLI interop
-    pub fn git_fetch(&self) -> Result<String> {
+    pub fn git_fetch(&self, remote: Option<&str>) -> Result<String> {
+        let remote = remote.map_or(self.default_remote.to_owned(), |r| r.to_owned());
+
         // Start a transaction
         let mut tx = self.repo.start_transaction();
 
@@ -161,9 +184,7 @@ impl Native {
         // We need this to expand refspecs
         let git_repo = get_git_repo(tx.repo().store())?;
 
-        // Use "origin" as the default remote name
-        // TODO: Make this configurable or detect from git config
-        let remote_name = RemoteName::new("origin");
+        let remote_name = RemoteName::new(&remote);
 
         // Expand the default fetch refspecs for the remote
         // This determines what refs to fetch (typically refs/heads/*)
@@ -276,7 +297,7 @@ mod tests {
     fn test_git_fetch_jj() {
         let native = Native::new();
 
-        let result = native.git_fetch();
+        let result = native.git_fetch(None);
         println!("{:?}", result);
         assert!(result.is_ok());
     }

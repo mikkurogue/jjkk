@@ -599,7 +599,10 @@ impl App {
 
     fn handle_fetch(&mut self) -> Result<()> {
         self.loading_start = Some(Instant::now());
-        match self.native_ops.git_fetch() {
+        // For now pick the default remote from the native_operations crate
+        // Should create a proper selection at some point, or a config option
+        // to set a preferred remote - for now default is just fine as most will use 'origin'
+        match self.native_ops.git_fetch(None) {
             Ok(_) => {
                 self.clear_loading();
                 self.set_status_message("Fetched from remote".to_string());
