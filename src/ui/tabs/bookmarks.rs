@@ -23,7 +23,7 @@ use crate::{
     jj::operations as jj_ops,
 };
 
-pub fn render_bookmarks(f: &mut Frame, app: &App, area: Rect) {
+pub fn render_bookmarks(f: &mut Frame, app: &mut App, area: Rect) {
     // Get bookmarks
     let bookmarks = match jj_ops::get_bookmarks() {
         Ok(b) => b,
@@ -88,7 +88,12 @@ pub fn render_bookmarks(f: &mut Frame, app: &App, area: Rect) {
                 .title("Bookmarks (* = current, j/k to navigate, Enter to checkout)")
                 .border_style(Style::default().fg(app.theme.surface1)),
         )
-        .style(Style::default().bg(app.theme.base));
+        .style(Style::default().bg(app.theme.base))
+        .highlight_style(
+            Style::default()
+                .bg(app.theme.surface1)
+                .add_modifier(Modifier::BOLD),
+        );
 
-    f.render_widget(list, area);
+    f.render_stateful_widget(list, area, &mut app.bookmark_list_state);
 }

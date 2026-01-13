@@ -73,12 +73,18 @@ where
 {
     loop {
         app.update_status_message_timeout();
-        terminal.draw(|f| render_ui(f, app))?;
 
-        if event::poll(std::time::Duration::from_millis(100))?
-            && let Event::Key(key) = event::read()?
-        {
-            app.handle_key_event(key)?;
+        // Only draw if needed or when loading spinner is active
+        if app.needs_redraw || app.loading_message.is_some() {
+            terminal.draw(|f| render_ui(f, app))?;
+            app.needs_redraw = false;
+        }
+
+        if event::poll(std::time::Duration::from_millis(100))? {
+            if let Event::Key(key) = event::read()? {
+                app.handle_key_event(key)?;
+                app.needs_redraw = true; // Mark for redraw after handling input
+            }
         }
 
         if app.should_quit {

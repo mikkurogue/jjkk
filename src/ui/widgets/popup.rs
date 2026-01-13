@@ -70,7 +70,7 @@ pub fn render_input_popup(
         Line::from(content_with_cursor),
         Line::from(""),
         Line::from(Span::styled(
-            "Enter to confirm | Shift+Enter for newline | Esc to cancel",
+            "Enter to confirm | Shift/Ctrl/Alt+Enter for newline | Esc to cancel",
             Style::default().fg(app.theme.subtext0),
         )),
     ];
@@ -187,6 +187,18 @@ pub fn render_help_popup(f: &mut Frame, app: &App, area: Rect) {
         Line::from("  n           Create new commit"),
         Line::from("  R           Refresh status"),
         Line::from("  X           Restore working copy"),
+        Line::from(""),
+        Line::from(Span::styled(
+            "Text Input (in popups)",
+            Style::default()
+                .fg(app.theme.teal)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from("  Enter             Submit/confirm"),
+        Line::from("  Shift+Enter       Insert newline"),
+        Line::from("  Ctrl+Enter        Insert newline (alt)"),
+        Line::from("  Alt+Enter         Insert newline (alt)"),
+        Line::from("  Esc               Cancel"),
         Line::from(""),
         Line::from(Span::styled(
             "Remote Operations",

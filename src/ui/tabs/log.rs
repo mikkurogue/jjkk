@@ -23,7 +23,7 @@ use crate::{
     jj::log,
 };
 
-pub fn render_log(f: &mut Frame, app: &App, area: Rect) {
+pub fn render_log(f: &mut Frame, app: &mut App, area: Rect) {
     // Get log with configured limit
     let limit = app.settings.ui.log_commits_count;
     let commits = match log::get_log(limit) {
@@ -108,7 +108,12 @@ pub fn render_log(f: &mut Frame, app: &App, area: Rect) {
                 .title(format!("Log (last {limit} commits, j/k to navigate)"))
                 .border_style(Style::default().fg(app.theme.surface1)),
         )
-        .style(Style::default().bg(app.theme.base));
+        .style(Style::default().bg(app.theme.base))
+        .highlight_style(
+            Style::default()
+                .bg(app.theme.surface1)
+                .add_modifier(Modifier::BOLD),
+        );
 
-    f.render_widget(list, area);
+    f.render_stateful_widget(list, area, &mut app.log_list_state);
 }

@@ -44,7 +44,7 @@ use crate::{
 
 /// Render the main ui of the application
 /// Initial state should show the working copy tab
-pub fn render_ui(f: &mut Frame, app: &App) {
+pub fn render_ui(f: &mut Frame, app: &mut App) {
     let size = f.area();
 
     // Create main layout
@@ -126,7 +126,7 @@ fn render_tab_bar(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(tabs, area);
 }
 
-fn render_tab_content(f: &mut Frame, app: &App, area: Rect) {
+fn render_tab_content(f: &mut Frame, app: &mut App, area: Rect) {
     match app.current_tab {
         Tab::WorkingCopy => {
             render_working_copy(f, app, area);
