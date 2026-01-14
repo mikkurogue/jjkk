@@ -19,7 +19,10 @@ use crate::{
         Theme,
     },
     jj::{
-        log,
+        log::{
+            self,
+            CommitInfo,
+        },
         native_operations::Native,
         operations::{
             self as jj_ops,
@@ -94,6 +97,7 @@ pub enum PopupCallback {
 
 pub struct App {
     pub current_tab: Tab,
+    pub previous_tab: Tab,
     pub settings: Settings,
     pub theme: Theme,
     pub should_quit: bool,
@@ -126,6 +130,13 @@ pub struct App {
     pub file_list_state:     ListState,
     pub bookmark_list_state: ListState,
     pub log_list_state:      ListState,
+
+    // Performance optimization: cache external command results
+    pub bookmarks:   Vec<BookmarkInfo>,
+    pub log_commits: Vec<CommitInfo>,
+
+    // Key event debouncing for smooth scrolling
+    pub last_key_event: Option<(KeyCode, Instant)>,
 }
 
 impl App {
@@ -136,6 +147,7 @@ impl App {
 
         Ok(Self {
             current_tab: Tab::WorkingCopy,
+            previous_tab: Tab::WorkingCopy,
             settings,
             theme,
             should_quit: false,
@@ -159,6 +171,9 @@ impl App {
             file_list_state: ListState::default(),
             bookmark_list_state: ListState::default(),
             log_list_state: ListState::default(),
+            bookmarks: Vec::new(),
+            log_commits: Vec::new(),
+            last_key_event: None,
         })
     }
 
@@ -172,6 +187,72 @@ impl App {
         self.update_diff()?;
         self.needs_redraw = true;
         Ok(())
+    }
+
+    pub fn refresh_bookmarks(&mut self) {
+        if let Ok(bookmarks) = jj_ops::get_bookmarks() {
+            self.bookmarks = bookmarks;
+            self.selected_bookmark_index = self
+                .selected_bookmark_index
+                .min(self.bookmarks.len().saturating_sub(1));
+            self.bookmark_list_state
+                .select(Some(self.selected_bookmark_index));
+            self.needs_redraw = true;
+        }
+    }
+
+    pub fn refresh_log(&mut self) {
+        let limit = self.settings.ui.log_commits_count;
+        if let Ok(commits) = log::get_log(limit) {
+            self.log_commits = commits;
+            self.selected_log_index = self
+                .selected_log_index
+                .min(self.log_commits.len().saturating_sub(1));
+            self.log_list_state.select(Some(self.selected_log_index));
+            self.needs_redraw = true;
+        }
+    }
+
+    pub fn refresh_all(&mut self) -> Result<()> {
+        self.refresh_status()?;
+        self.refresh_bookmarks();
+        self.refresh_log();
+        Ok(())
+    }
+
+    pub fn switch_to_tab(&mut self, new_tab: Tab) {
+        if self.current_tab != new_tab {
+            self.previous_tab = self.current_tab;
+            self.current_tab = new_tab;
+
+            // Refresh data when switching to bookmarks or log tabs
+            match new_tab {
+                Tab::Bookmarks => self.refresh_bookmarks(),
+                Tab::Log => self.refresh_log(),
+                Tab::WorkingCopy => {
+                    // Working copy is already refreshed via refresh_status
+                }
+            }
+        }
+    }
+
+    /// Check if we should process a navigation key event (for debouncing)
+    /// Returns true if enough time has passed since the last similar key event
+    fn should_process_navigation_key(&mut self, key_code: KeyCode) -> bool {
+        const DEBOUNCE_MS: u128 = 50; // 50ms debounce threshold
+
+        let now = Instant::now();
+
+        if let Some((last_key, last_time)) = self.last_key_event {
+            // If it's the same key and not enough time has passed, skip it
+            if last_key == key_code && last_time.elapsed().as_millis() < DEBOUNCE_MS {
+                return false;
+            }
+        }
+
+        // Update last key event
+        self.last_key_event = Some((key_code, now));
+        true
     }
 
     pub fn update_diff(&mut self) -> Result<()> {
@@ -259,7 +340,7 @@ impl App {
                     match jj_ops::set_bookmark(&bookmark_name) {
                         Ok(_) => {
                             self.set_status_message(format!("Set bookmark: {bookmark_name}"));
-                            self.refresh_status()?;
+                            self.refresh_all()?;
                         }
                         Err(e) => {
                             self.show_error(format!("Failed to set bookmark: {e}"));
@@ -346,21 +427,26 @@ impl App {
                 self.should_quit = true;
             }
             KeyCode::Char('1') => {
-                self.current_tab = Tab::WorkingCopy;
+                self.switch_to_tab(Tab::WorkingCopy);
             }
             KeyCode::Char('2') => {
-                self.current_tab = Tab::Bookmarks;
+                self.switch_to_tab(Tab::Bookmarks);
             }
             KeyCode::Char('3') => {
-                self.current_tab = Tab::Log;
+                self.switch_to_tab(Tab::Log);
             }
             KeyCode::Tab => {
-                self.current_tab = self.current_tab.next();
+                self.switch_to_tab(self.current_tab.next());
             }
             KeyCode::BackTab => {
-                self.current_tab = self.current_tab.prev();
+                self.switch_to_tab(self.current_tab.prev());
             }
             KeyCode::Char('j') | KeyCode::Down => {
+                // Apply debouncing to navigation keys
+                if !self.should_process_navigation_key(key.code) {
+                    return Ok(());
+                }
+
                 match self.current_tab {
                     Tab::WorkingCopy => {
                         if !self.files.is_empty() {
@@ -372,27 +458,28 @@ impl App {
                         }
                     }
                     Tab::Bookmarks => {
-                        if let Ok(bookmarks) = jj_ops::get_bookmarks()
-                            && !bookmarks.is_empty()
-                        {
+                        if !self.bookmarks.is_empty() {
                             self.selected_bookmark_index =
-                                (self.selected_bookmark_index + 1).min(bookmarks.len() - 1);
+                                (self.selected_bookmark_index + 1).min(self.bookmarks.len() - 1);
                             self.bookmark_list_state
                                 .select(Some(self.selected_bookmark_index));
                         }
                     }
                     Tab::Log => {
-                        if let Ok(commits) = log::get_log(self.settings.ui.log_commits_count)
-                            && !commits.is_empty()
-                        {
+                        if !self.log_commits.is_empty() {
                             self.selected_log_index =
-                                (self.selected_log_index + 1).min(commits.len() - 1);
+                                (self.selected_log_index + 1).min(self.log_commits.len() - 1);
                             self.log_list_state.select(Some(self.selected_log_index));
                         }
                     }
                 }
             }
             KeyCode::Char('k') | KeyCode::Up => {
+                // Apply debouncing to navigation keys
+                if !self.should_process_navigation_key(key.code) {
+                    return Ok(());
+                }
+
                 match self.current_tab {
                     Tab::WorkingCopy => {
                         self.selected_file_index = self.selected_file_index.saturating_sub(1);
@@ -460,7 +547,7 @@ impl App {
             }
             KeyCode::Char('R') => {
                 // Capital R to refresh status
-                self.refresh_status()?;
+                self.refresh_all()?;
                 self.set_status_message("Refreshed".to_string());
             }
             KeyCode::Char('X') => {
@@ -488,7 +575,7 @@ impl App {
     fn restore_working_copy(&mut self) -> Result<()> {
         match jj_ops::restore_working_copy() {
             Ok(_) => {
-                self.refresh_status()?;
+                self.refresh_all()?;
             }
             Err(e) => {
                 self.show_error(format!("Failed to restore working copy: {e}"));
@@ -538,7 +625,7 @@ impl App {
             PopupCallback::Describe => match self.native_ops.describe(text) {
                 Ok(_) => {
                     self.set_status_message("Description updated".to_string());
-                    self.refresh_status()?;
+                    self.refresh_all()?;
                 }
                 Err(e) => {
                     self.show_error(format!("Failed to describe: {e}"));
@@ -547,7 +634,7 @@ impl App {
             PopupCallback::Commit => match self.native_ops.commit(text) {
                 Ok(_) => {
                     self.set_status_message("Committed successfully".to_string());
-                    self.refresh_status()?;
+                    self.refresh_all()?;
                 }
                 Err(e) => {
                     self.show_error(format!("Failed to commit: {e}"));
@@ -556,7 +643,7 @@ impl App {
             PopupCallback::Rebase => match jj_ops::rebase(text) {
                 Ok(_) => {
                     self.set_status_message(format!("Rebased to {text}"));
-                    self.refresh_status()?;
+                    self.refresh_all()?;
                 }
                 Err(e) => {
                     self.show_error(format!("Failed to rebase: {e}"));
@@ -578,7 +665,7 @@ impl App {
                 match jj_ops::new_commit() {
                     Ok(_) => {
                         self.set_status_message("Created new commit".to_string());
-                        self.refresh_status()?;
+                        self.refresh_all()?;
                     }
                     Err(e) => {
                         self.show_error(format!("Failed to create new commit: {e}"));
@@ -601,7 +688,7 @@ impl App {
             Ok(_) => {
                 self.clear_loading();
                 self.set_status_message("Fetched from remote".to_string());
-                self.refresh_status()?;
+                self.refresh_all()?;
             }
             Err(e) => {
                 self.show_error(format!("Failed to fetch: {e}"));
@@ -621,7 +708,7 @@ impl App {
                     |b| format!("Pushed bookmark: {b}"),
                 );
                 self.set_status_message(msg);
-                self.refresh_status()?;
+                self.refresh_all()?;
             }
             Err(e) => {
                 self.clear_loading();
@@ -681,14 +768,15 @@ impl App {
     }
 
     fn handle_bookmark_checkout(&mut self) -> Result<()> {
-        let bookmarks = jj_ops::get_bookmarks()?;
-        if let Some(bookmark) = bookmarks.get(self.selected_bookmark_index) {
-            match jj_ops::checkout_bookmark(&bookmark.name) {
+        // Use cached bookmarks instead of fetching again
+        if let Some(bookmark) = self.bookmarks.get(self.selected_bookmark_index) {
+            let bookmark_name = bookmark.name.clone();
+            match jj_ops::checkout_bookmark(&bookmark_name) {
                 Ok(_) => {
-                    self.set_status_message(format!("Checked out bookmark: {}", bookmark.name));
+                    self.set_status_message(format!("Checked out bookmark: {bookmark_name}"));
                     // auto track the bookmark
-                    jj_ops::auto_track_bookmark(&bookmark.name).ok();
-                    self.refresh_status()?;
+                    jj_ops::auto_track_bookmark(&bookmark_name).ok();
+                    self.refresh_all()?;
                 }
                 Err(e) => {
                     self.show_error(format!("Failed to checkout bookmark: {e}"));

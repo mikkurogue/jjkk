@@ -18,31 +18,14 @@ use ratatui::{
     },
 };
 
-use crate::{
-    app::App,
-    jj::log,
-};
+use crate::app::App;
 
 pub fn render_log(f: &mut Frame, app: &mut App, area: Rect) {
     // Get log with configured limit
     let limit = app.settings.ui.log_commits_count;
 
-    let commits = match log::get_log(limit) {
-        Ok(c) => c,
-        Err(e) => {
-            let error_text = format!("Failed to get log: {e}");
-            let paragraph = Paragraph::new(error_text)
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title("Log")
-                        .border_style(Style::default().fg(app.theme.surface1)),
-                )
-                .style(Style::default().fg(app.theme.red).bg(app.theme.base));
-            f.render_widget(paragraph, area);
-            return;
-        }
-    };
+    // Use cached log data
+    let commits = &app.log_commits;
 
     if commits.is_empty() {
         let paragraph = Paragraph::new("No commits found.")

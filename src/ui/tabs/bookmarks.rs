@@ -18,29 +18,11 @@ use ratatui::{
     },
 };
 
-use crate::{
-    app::App,
-    jj::operations as jj_ops,
-};
+use crate::app::App;
 
 pub fn render_bookmarks(f: &mut Frame, app: &mut App, area: Rect) {
-    // Get bookmarks
-    let bookmarks = match jj_ops::get_bookmarks() {
-        Ok(b) => b,
-        Err(e) => {
-            let error_text = format!("Failed to get bookmarks: {e}");
-            let paragraph = Paragraph::new(error_text)
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title("Bookmarks")
-                        .border_style(Style::default().fg(app.theme.surface1)),
-                )
-                .style(Style::default().fg(app.theme.red).bg(app.theme.base));
-            f.render_widget(paragraph, area);
-            return;
-        }
-    };
+    // Use cached bookmarks data
+    let bookmarks = &app.bookmarks;
 
     if bookmarks.is_empty() {
         let paragraph = Paragraph::new("No bookmarks found.\nPress 'b' to create one.")

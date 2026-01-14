@@ -45,8 +45,8 @@ async fn main() -> Result<()> {
     // Create app state
     let mut app = App::new()?;
 
-    // Load initial status
-    app.refresh_status()?;
+    // Load initial status, bookmarks, and log
+    app.refresh_all()?;
 
     // Run the application
     let res = run_app(&mut terminal, &mut app);
@@ -77,7 +77,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()> 
             app.needs_redraw = false;
         }
 
-        if event::poll(std::time::Duration::from_millis(100))?
+        if event::poll(std::time::Duration::from_millis(8))?
             && let Event::Key(key) = event::read()?
         {
             app.handle_key_event(key)?;
