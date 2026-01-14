@@ -640,15 +640,23 @@ impl App {
                     self.show_error(format!("Failed to commit: {e}"));
                 }
             },
-            PopupCallback::Rebase => match jj_ops::rebase(text) {
-                Ok(_) => {
-                    self.set_status_message(format!("Rebased to {text}"));
-                    self.refresh_all()?;
+            PopupCallback::Rebase => {
+                let text = if text.trim().is_empty() {
+                    "@"
+                } else {
+                    text.trim()
+                };
+
+                match jj_ops::rebase(text) {
+                    Ok(_) => {
+                        self.set_status_message(format!("Rebased to {text}"));
+                        self.refresh_all()?;
+                    }
+                    Err(e) => {
+                        self.show_error(format!("Failed to rebase: {e}"));
+                    }
                 }
-                Err(e) => {
-                    self.show_error(format!("Failed to rebase: {e}"));
-                }
-            },
+            }
         }
         Ok(())
     }

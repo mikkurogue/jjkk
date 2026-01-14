@@ -76,6 +76,11 @@ impl Native {
     /// Describe the current change with a message using jj-lib
     /// This is a native implementation using the jj-lib crate instead of CLI interop
     pub fn describe(&self, message: &str) -> Result<String> {
+        // validate that there is at least some kind of message
+        if message.trim().is_empty() {
+            return Err(anyhow::anyhow!("Description message cannot be empty"));
+        }
+
         // Start a transaction
         let mut tx = self.repo.start_transaction();
 
@@ -110,6 +115,11 @@ impl Native {
     /// Commit the current change with a message and create a new empty working copy commit
     /// This is equivalent to `jj commit -m <message>`
     pub fn commit(&self, message: &str) -> Result<String> {
+        // validate that there is at least some kind of message
+        if message.trim().is_empty() {
+            return Err(anyhow::anyhow!("Commit message cannot be empty"));
+        }
+
         let mut tx = self.repo.start_transaction();
 
         let wc_commit_id = tx
