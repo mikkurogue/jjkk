@@ -22,7 +22,10 @@ use jj_lib::{
         get_git_repo,
     },
     object_id::ObjectId,
-    ref_name::RemoteName,
+    ref_name::{
+        RefName,
+        RemoteName,
+    },
     repo::{
         ReadonlyRepo,
         Repo,
@@ -231,6 +234,45 @@ impl Native {
              {} remote bookmarks imported",
             stats.changed_remote_bookmarks.len()
         ))
+    }
+
+    pub fn track(&self, bookmark_name: &str, remote: Option<&str>) -> Result<String> {
+        let remote = remote.map_or_else(
+            || self.default_remote.clone(),
+            std::borrow::ToOwned::to_owned,
+        );
+
+        let mut tx = self.repo.start_transaction();
+
+        let remote_name = RemoteName::new(&remote);
+        let ref_name = RefName::new(bookmark_name);
+        let symbol = ref_name.to_remote_symbol(remote_name);
+
+        let remote_ref = tx.repo().view().get_remote_bookmark(symbol);
+
+        if remote_ref.is_tracked() {
+            return Ok(format!(
+                "Remote bookmark already tracked: {bookmark_name}@{remote}"
+            ));
+        }
+
+        tx.repo_mut().track_remote_bookmark(symbol)?;
+
+        let local_target = tx.repo().view().get_local_bookmark(&ref_name);
+        let has_conflict = local_target.has_conflict();
+
+        tx.commit(&format!("track remote bookmark {bookmark_name}@{remote}"))?;
+
+        let mut message = String::from("Started tracking 1 remote bookmarks.");
+
+        if has_conflict {
+            message.push_str(&format!(
+                "\nWarning: Tracking created conflicts in local bookmark '{bookmark_name}'.\n\
+                 Run 'jj log' or 'jj st' to see the conflicted state."
+            ));
+        }
+
+        Ok(message)
     }
 }
 

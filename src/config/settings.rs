@@ -10,45 +10,31 @@ pub struct Settings {
     #[serde(default)]
     pub theme: ThemeSettings,
     #[serde(default)]
-    pub ui:    UiSettings,
+    pub ui: UiSettings,
+    #[serde(default)]
+    pub auto_track_local: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThemeSettings {
-    #[serde(default = "default_theme_name")]
+    #[serde(default)]
     pub name: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UiSettings {
-    #[serde(default = "default_diff_context_lines")]
+    #[serde(default)]
     pub diff_context_lines: usize,
-    #[serde(default = "default_visible_diff_lines")]
+    #[serde(default)]
     pub visible_diff_lines: usize,
-    #[serde(default = "default_log_commits_count")]
+    #[serde(default)]
     pub log_commits_count:  usize,
-}
-
-fn default_theme_name() -> String {
-    "catppuccin-mocha".to_string()
-}
-
-const fn default_diff_context_lines() -> usize {
-    3
-}
-
-const fn default_visible_diff_lines() -> usize {
-    30
-}
-
-const fn default_log_commits_count() -> usize {
-    100
 }
 
 impl Default for ThemeSettings {
     fn default() -> Self {
         Self {
-            name: default_theme_name(),
+            name: "catppuccin-mocha".to_owned(),
         }
     }
 }
@@ -56,9 +42,9 @@ impl Default for ThemeSettings {
 impl Default for UiSettings {
     fn default() -> Self {
         Self {
-            diff_context_lines: default_diff_context_lines(),
-            visible_diff_lines: default_visible_diff_lines(),
-            log_commits_count:  default_log_commits_count(),
+            diff_context_lines: 3,
+            visible_diff_lines: 30,
+            log_commits_count:  100,
         }
     }
 }
