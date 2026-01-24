@@ -563,12 +563,9 @@ impl App {
 
     fn track_current_bookmark(&mut self) {
         let bookmark = jj_ops::get_current_bookmark().ok().flatten();
-        let bookmark = match bookmark {
-            Some(b) => b,
-            None => {
-                self.show_warning("No current bookmark to track.".to_string());
-                return;
-            }
+        let Some(bookmark) = bookmark else {
+            self.show_warning("No current bookmark to track.".to_string());
+            return;
         };
 
         match self.native_ops.track(&bookmark, None) {

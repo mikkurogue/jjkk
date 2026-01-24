@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    fmt::Write,
     sync::Arc,
 };
 
@@ -258,18 +259,19 @@ impl Native {
 
         tx.repo_mut().track_remote_bookmark(symbol)?;
 
-        let local_target = tx.repo().view().get_local_bookmark(&ref_name);
+        let local_target = tx.repo().view().get_local_bookmark(ref_name);
         let has_conflict = local_target.has_conflict();
 
-        tx.commit(&format!("track remote bookmark {bookmark_name}@{remote}"))?;
+        tx.commit(format!("track remote bookmark {bookmark_name}@{remote}"))?;
 
         let mut message = String::from("Started tracking 1 remote bookmarks.");
 
         if has_conflict {
-            message.push_str(&format!(
+            let _ = write!(
+                message,
                 "\nWarning: Tracking created conflicts in local bookmark '{bookmark_name}'.\n\
                  Run 'jj log' or 'jj st' to see the conflicted state."
-            ));
+            );
         }
 
         Ok(message)

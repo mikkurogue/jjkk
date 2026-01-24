@@ -5,28 +5,6 @@ use anyhow::{
     Result,
 };
 
-pub fn track_current_bookmark() -> Result<String> {
-    let current_bookmark = get_current_bookmark().ok().flatten();
-
-    if let Some(bookmark_name) = current_bookmark {
-        let output = Command::new("jj")
-            .args(["bookmark", "track", &bookmark_name, "--remote=origin"])
-            .output()
-            .context("Failed to run jj bookmark track")?;
-
-        if !output.status.success() {
-            anyhow::bail!(
-                "jj track failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-        }
-
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    } else {
-        anyhow::bail!("No current bookmark to track");
-    }
-}
-
 /// basically a copy of `track_current_bookmark` but takes a name argument
 /// to track a specific bookmark handy for when we create a new bookmark
 /// and want to track it right away
