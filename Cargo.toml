@@ -8,7 +8,7 @@ anyhow = "1.0.100"
 jj-lib = "0.37.0"
 tokio = { version = "1", features = ["full"] }
 ratatui = "0.29.0"
-crossterm = { version = "0.28.1", features = ["event-stream"] }
+crossterm = { version = "0.29.0", features = ["event-stream"] }
 similar = "2.6.0"
 syntect = "5.2.0"
 futures = "0.3.0"
