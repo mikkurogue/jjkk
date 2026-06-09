@@ -43,13 +43,13 @@ async fn main() -> Result<()> {
     let mut terminal = Terminal::new(backend)?;
 
     // Create app state
-    let mut app = App::new()?;
+    let mut app = App::new().await?;
 
     // Load initial status, bookmarks, and log
     app.refresh_all()?;
 
     // Run the application
-    let res = run_app(&mut terminal, &mut app);
+    let res = run_app(&mut terminal, &mut app).await;
 
     // Restore terminal
     disable_raw_mode()?;
@@ -67,7 +67,10 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()> {
+async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()>
+where
+    <B as Backend>::Error: Send + Sync + 'static,
+{
     loop {
         app.update_status_message_timeout();
 
@@ -80,7 +83,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()> 
         if event::poll(std::time::Duration::from_millis(8))?
             && let Event::Key(key) = event::read()?
         {
-            app.handle_key_event(key)?;
+            app.handle_key_event(key).await?;
             app.needs_redraw = true; // Mark for redraw after handling input
         }
 

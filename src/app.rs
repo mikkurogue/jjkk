@@ -140,7 +140,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new() -> Result<Self> {
+    pub async fn new() -> Result<Self> {
         let settings = Settings::load()?;
         let theme = Theme::catppuccin_mocha();
         let repo = JjRepo::open(None)?;
@@ -164,7 +164,7 @@ impl App {
             _repo: repo,
             files: Vec::new(),
             current_diff: None,
-            native_ops: Native::new(),
+            native_ops: Native::new().await,
             syntax_set: SyntaxSet::load_defaults_newlines(),
             theme_set: ThemeSet::load_defaults(),
             needs_redraw: true,
@@ -264,7 +264,7 @@ impl App {
         Ok(())
     }
 
-    pub fn handle_key_event(&mut self, key: KeyEvent) -> Result<()> {
+    pub async fn handle_key_event(&mut self, key: KeyEvent) -> Result<()> {
         // Handle popup input first with tui-textarea
         if let PopupState::Input {
             ref mut textarea,
@@ -281,13 +281,10 @@ impl App {
                     let text = textarea.lines().join("\n");
                     let cb = callback;
                     self.popup_state = PopupState::None;
-                    self.execute_popup_callback(cb, &text)?;
+                    self.execute_popup_callback(cb, &text).await?;
                 }
                 _ => {
-                    // Convert KeyEvent to tui_textarea::Input
-                    // tui-textarea expects crossterm::event::Event, not just KeyEvent
-                    use crossterm::event::Event;
-                    textarea.input(Event::Key(key));
+                    textarea.input(key);
                 }
             }
             return Ok(());
@@ -531,7 +528,7 @@ impl App {
                 self.handle_new_commit()?;
             }
             KeyCode::Char('f') => {
-                self.handle_fetch()?;
+                self.handle_fetch().await?;
             }
             KeyCode::Char('p') => {
                 self.handle_push()?;
@@ -543,7 +540,7 @@ impl App {
                 self.show_bookmark_popup();
             }
             KeyCode::Char('t') => {
-                self.track_current_bookmark();
+                self.track_current_bookmark().await;
             }
             KeyCode::Char('R') => {
                 // Capital R to refresh status
@@ -561,14 +558,14 @@ impl App {
         Ok(())
     }
 
-    fn track_current_bookmark(&mut self) {
+    async fn track_current_bookmark(&mut self) {
         let bookmark = jj_ops::get_current_bookmark().ok().flatten();
         let Some(bookmark) = bookmark else {
             self.show_warning("No current bookmark to track.".to_string());
             return;
         };
 
-        match self.native_ops.track(&bookmark, None) {
+        match self.native_ops.track(&bookmark, None).await {
             Ok(_) => {
                 self.set_status_message(format!("Tracking bookmark: {bookmark}"));
             }
@@ -626,9 +623,9 @@ impl App {
         };
     }
 
-    fn execute_popup_callback(&mut self, callback: PopupCallback, text: &str) -> Result<()> {
+    async fn execute_popup_callback(&mut self, callback: PopupCallback, text: &str) -> Result<()> {
         match callback {
-            PopupCallback::Describe => match self.native_ops.describe(text) {
+            PopupCallback::Describe => match self.native_ops.describe(text).await {
                 Ok(_) => {
                     self.set_status_message("Description updated".to_string());
                     self.refresh_all()?;
@@ -637,7 +634,7 @@ impl App {
                     self.show_error(format!("Failed to describe: {e}"));
                 }
             },
-            PopupCallback::Commit => match self.native_ops.commit(text) {
+            PopupCallback::Commit => match self.native_ops.commit(text).await {
                 Ok(_) => {
                     self.set_status_message("Committed successfully".to_string());
                     self.refresh_all()?;
@@ -693,12 +690,12 @@ impl App {
         Ok(())
     }
 
-    fn handle_fetch(&mut self) -> Result<()> {
+    async fn handle_fetch(&mut self) -> Result<()> {
         self.loading_start = Some(Instant::now());
         // For now pick the default remote from the native_operations crate
         // Should create a proper selection at some point, or a config option
         // to set a preferred remote - for now default is just fine as most will use 'origin'
-        match self.native_ops.git_fetch(None) {
+        match self.native_ops.git_fetch(None).await {
             Ok(_) => {
                 self.clear_loading();
                 self.set_status_message("Fetched from remote".to_string());

@@ -14,13 +14,17 @@ use jj_lib::{
         StackedConfig,
     },
     git::{
-        GitFetch,
-        GitImportOptions,
-        GitSubprocessOptions,
-        RemoteCallbacks,
-        expand_default_fetch_refspecs,
+        expand_fetch_refspecs,
         get_all_remote_names,
         get_git_repo,
+        GitFetch,
+        GitFetchRefExpression,
+        GitImportOptions,
+        GitProgress,
+        GitSidebandLineTerminator,
+        GitSubprocessCallback,
+        GitSubprocessOptions,
+        load_default_fetch_bookmarks,
     },
     object_id::ObjectId,
     ref_name::{
@@ -33,6 +37,7 @@ use jj_lib::{
         StoreFactories,
     },
     settings::UserSettings,
+    str_util::StringExpression,
     workspace::{
         Workspace,
         default_working_copy_factories,
@@ -50,11 +55,12 @@ pub struct Native {
 impl Native {
     /// Create a new native jj operation handler
     /// for now its empty
-    pub fn new() -> Self {
+    pub async fn new() -> Self {
         let workspace = detect_workspace().expect("Failed to detect workspace");
         let repo = workspace
             .repo_loader()
             .load_at_head()
+            .await
             .expect("Failed to load repo head");
 
         let remote_names = get_all_remote_names(repo.store()).expect("Failed to get remotes");
@@ -79,7 +85,7 @@ impl Native {
 
     /// Describe the current change with a message using jj-lib
     /// This is a native implementation using the jj-lib crate instead of CLI interop
-    pub fn describe(&self, message: &str) -> Result<String> {
+    pub async fn describe(&self, message: &str) -> Result<String> {
         // validate that there is at least some kind of message
         if message.trim().is_empty() {
             return Err(anyhow::anyhow!("Description message cannot be empty"));
@@ -103,13 +109,13 @@ impl Native {
         tx.repo_mut()
             .rewrite_commit(&wc_commit)
             .set_description(message)
-            .write()?;
+            .write().await?;
 
         // Rebase any descendants
-        tx.repo_mut().rebase_descendants()?;
+        tx.repo_mut().rebase_descendants().await?;
 
         // Commit the transaction
-        tx.commit("describe working copy")?;
+        tx.commit("describe working copy").await?;
 
         Ok(format!(
             "Working copy commit description updated to: {message}"
@@ -118,7 +124,7 @@ impl Native {
 
     /// Commit the current change with a message and create a new empty working copy commit
     /// This is equivalent to `jj commit -m <message>`
-    pub fn commit(&self, message: &str) -> Result<String> {
+    pub async fn commit(&self, message: &str) -> Result<String> {
         // validate that there is at least some kind of message
         if message.trim().is_empty() {
             return Err(anyhow::anyhow!("Commit message cannot be empty"));
@@ -139,7 +145,7 @@ impl Native {
             .repo_mut()
             .rewrite_commit(&wc_commit)
             .set_description(message)
-            .write()?;
+            .write().await?;
 
         // Create an empty tree for the new working copy commit
         let empty_tree = tx.repo().store().empty_merged_tree();
@@ -151,7 +157,7 @@ impl Native {
                 vec![committed.id().clone()], // Parent is the commit we just created
                 empty_tree,                   // Empty tree for the new working copy
             )
-            .write()?;
+            .write().await?;
 
         // Update the working copy to point to the new empty commit
         tx.repo_mut().set_wc_commit(
@@ -160,10 +166,10 @@ impl Native {
         )?;
 
         // Rebase any descendants
-        tx.repo_mut().rebase_descendants()?;
+        tx.repo_mut().rebase_descendants().await?;
 
         // Commit the transaction
-        tx.commit("commit working copy")?;
+        tx.commit("commit working copy").await?;
 
         Ok(format!(
             "Created commit {} with description: {}",
@@ -174,7 +180,7 @@ impl Native {
 
     /// Fetch changes from the remote git repository using native jj-lib
     /// This is a native implementation using the jj-lib crate instead of CLI interop
-    pub fn git_fetch(&self, remote: Option<&str>) -> Result<String> {
+    pub async fn git_fetch(&self, remote: Option<&str>) -> Result<String> {
         let remote = remote.map_or_else(
             || self.default_remote.clone(),
             std::borrow::ToOwned::to_owned,
@@ -203,31 +209,40 @@ impl Native {
 
         let remote_name = RemoteName::new(&remote);
 
-        // Expand the default fetch refspecs for the remote
-        // This determines what refs to fetch (typically refs/heads/*)
-        let (_ignored_refspecs, refspecs) = expand_default_fetch_refspecs(remote_name, &git_repo)?;
+        // Load the default fetch bookmarks from the git remote config
+        let (_ignored_refspecs, bookmarks_expr) =
+            load_default_fetch_bookmarks(&remote_name, &git_repo)?;
+
+        // Create the fetch expression using the configured bookmarks and default tag expression
+        let expr = GitFetchRefExpression {
+            bookmark: bookmarks_expr,
+            tag:      StringExpression::all(),
+        };
+
+        // Expand the fetch refspecs
+        let expanded_refspecs = expand_fetch_refspecs(&remote_name, expr)?;
 
         // Create GitFetch handler (after we're done with the immutable borrow above)
         let mut git_fetch = GitFetch::new(tx.repo_mut(), subprocess_options, &import_options)?;
 
-        // Set up callbacks for progress reporting (currently no-op)
-        // You can extend this to provide progress updates
-        let callbacks = RemoteCallbacks::default();
+        // No-op callback for progress reporting
+        struct NoopCallback;
+        impl GitSubprocessCallback for NoopCallback {
+            fn needs_progress(&self) -> bool { false }
+            fn progress(&mut self, _: &GitProgress) -> std::io::Result<()> { std::result::Result::Ok(()) }
+            fn local_sideband(&mut self, _: &[u8], _: Option<GitSidebandLineTerminator>) -> std::io::Result<()> { std::result::Result::Ok(()) }
+            fn remote_sideband(&mut self, _: &[u8], _: Option<GitSidebandLineTerminator>) -> std::io::Result<()> { std::result::Result::Ok(()) }
+        }
+        let mut callback = NoopCallback;
 
         // Perform the actual fetch operation
-        // Parameters:
-        // - remote_name: "origin"
-        // - refspecs: what to fetch
-        // - callbacks: progress reporting
-        // - depth: None for full history (could use Some(n) for shallow fetch)
-        // - fetch_tags_override: None to use git config default
-        git_fetch.fetch(remote_name, refspecs, callbacks, None, None)?;
+        git_fetch.fetch(&remote_name, expanded_refspecs, &mut callback, None, None)?;
 
         // Import the fetched refs into jj's view
         let stats = git_fetch.import_refs()?;
 
         // Commit the transaction
-        tx.commit("fetch from git remote")?;
+        tx.commit("fetch from git remote").await?;
 
         // Return a summary of what was fetched
         Ok(format!(
@@ -237,7 +252,7 @@ impl Native {
         ))
     }
 
-    pub fn track(&self, bookmark_name: &str, remote: Option<&str>) -> Result<String> {
+    pub async fn track(&self, bookmark_name: &str, remote: Option<&str>) -> Result<String> {
         let remote = remote.map_or_else(
             || self.default_remote.clone(),
             std::borrow::ToOwned::to_owned,
@@ -262,7 +277,7 @@ impl Native {
         let local_target = tx.repo().view().get_local_bookmark(ref_name);
         let has_conflict = local_target.has_conflict();
 
-        tx.commit(format!("track remote bookmark {bookmark_name}@{remote}"))?;
+        tx.commit(format!("track remote bookmark {bookmark_name}@{remote}")).await?;
 
         let mut message = String::from("Started tracking 1 remote bookmarks.");
 
@@ -324,37 +339,37 @@ fn detect_user_settings() -> Result<UserSettings> {
 mod tests {
     use super::*;
 
-    #[test]
+    #[tokio::test]
     #[ignore] // Only run manually in a jj repo
-    fn test_describe_jj() {
-        let native = Native::new();
+    async fn test_describe_jj() {
+        let native = Native::new().await;
 
-        let result = native.describe("Test description from jj-lib");
+        let result = native.describe("Test description from jj-lib").await;
         println!("{:?}", result);
         assert!(result.is_ok());
     }
 
-    #[test]
+    #[tokio::test]
     #[ignore] // Only run manually in a jj repo
-    fn test_commit_jj() {
-        let native = Native::new();
+    async fn test_commit_jj() {
+        let native = Native::new().await;
 
         // First set up a working copy with some description
-        let describe_result = native.describe("Setting up test commit");
+        let describe_result = native.describe("Setting up test commit").await;
         assert!(describe_result.is_ok());
 
         // Now commit it
-        let commit_result = native.commit("Test commit from jj-lib");
+        let commit_result = native.commit("Test commit from jj-lib").await;
         println!("{:?}", commit_result);
         assert!(commit_result.is_ok());
     }
 
-    #[test]
+    #[tokio::test]
     #[ignore] // Only run manually in a jj repo with a git remote configured
-    fn test_git_fetch_jj() {
-        let native = Native::new();
+    async fn test_git_fetch_jj() {
+        let native = Native::new().await;
 
-        let result = native.git_fetch(None);
+        let result = native.git_fetch(None).await;
         println!("{:?}", result);
         assert!(result.is_ok());
     }
